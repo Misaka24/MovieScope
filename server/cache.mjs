@@ -11,6 +11,18 @@ export async function getCachedValue(cacheKey) {
   return result.rows[0] || null
 }
 
+export async function getLatestCachedValue(cacheKey) {
+  const db = await getDatabase()
+  const result = await db.query(
+    `SELECT payload, fetched_at, expires_at
+       FROM api_cache
+      WHERE cache_key = $1
+        AND fetched_at > NOW() - INTERVAL '30 days'`,
+    [cacheKey],
+  )
+  return result.rows[0] || null
+}
+
 export async function putCachedValue({ cacheKey, provider, value, ttlMs }) {
   const db = await getDatabase()
   await db.query(
@@ -47,6 +59,8 @@ export async function cachedSql({ cacheKey, provider, operation, ttlMs, loader }
     return { value, cache: 'miss', fetchedAt: new Date() }
   } catch (error) {
     await logProviderSync({ provider, operation, cacheKey, status: 'error', durationMs: performance.now() - startedAt, errorMessage: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000) })
+    const stale = await getLatestCachedValue(cacheKey)
+    if (stale) return { value: stale.payload, cache: 'stale', fetchedAt: stale.fetched_at }
     throw error
   }
 }

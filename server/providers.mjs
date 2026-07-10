@@ -10,16 +10,20 @@ function delay(ms) {
 
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, { ...options, signal: AbortSignal.timeout(requestTimeout) })
+  const body = await response.text()
   if (!response.ok) {
-    const body = await response.text()
     throw new Error(`上游接口 ${response.status}: ${body.slice(0, 200)}`)
   }
   const contentType = response.headers.get('content-type') || ''
   if (!contentType.includes('application/json')) {
-    const body = await response.text()
     throw new Error(`上游接口返回非 JSON 内容: ${body.slice(0, 200)}`)
   }
-  return response.json()
+  if (!body.trim()) throw new Error('上游接口返回空响应')
+  try {
+    return JSON.parse(body)
+  } catch {
+    throw new Error(`上游接口返回无效 JSON: ${body.slice(0, 200)}`)
+  }
 }
 
 function appendParams(url, params) {
@@ -59,7 +63,7 @@ export async function justOne(path, params = {}, ttlMs = 30 * 60 * 1000) {
   const cacheKey = `justone:${path}:${JSON.stringify(params)}`
   const result = await cachedSql({
     cacheKey,
-    provider: path.includes('/douban/') ? 'douban' : 'imdb',
+    provider: 'imdb',
     operation: path,
     ttlMs,
     loader: async () => {

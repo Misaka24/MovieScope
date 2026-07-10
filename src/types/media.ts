@@ -1,6 +1,5 @@
 export interface RatingSet {
   imdb: number | null
-  douban: number | null
   tmdb: number | null
 }
 
@@ -19,7 +18,6 @@ export interface MediaItem {
   ratings: RatingSet
   ratingDisplay: {
     imdb: RatingDisplayMode
-    douban: RatingDisplayMode
   }
   sources: string[]
   rank?: number | null

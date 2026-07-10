@@ -70,37 +70,37 @@ onBeforeUnmount(() => {
 
 <template>
   <header ref="root" class="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#121212] shadow-2xl">
-    <div class="mx-auto flex h-16 w-full max-w-[1440px] items-center gap-3 px-4 md:px-10 lg:px-20">
-      <a href="/" class="flex-none rounded bg-primary-container px-2.5 py-2 text-[11px] font-black leading-none text-on-primary-container shadow-sm">
+    <div class="mx-auto flex h-12 w-full max-w-[1180px] items-center gap-1.5 px-3 md:px-5 lg:px-7">
+      <a href="/" class="flex-none rounded bg-primary-container px-2 py-1.5 text-[9px] font-black leading-none text-on-primary-container shadow-sm">
         MOVIE<br>SCOPE
       </a>
 
       <button class="header-action" type="button" :aria-expanded="menuOpen" @click.stop="toggleMenu">
-        <span class="material-symbols-outlined">menu</span>
-        <span class="hidden font-bold sm:inline">菜单</span>
+        <span class="material-symbols-outlined text-xl">menu</span>
+        <span class="hidden text-sm font-bold sm:inline">菜单</span>
       </button>
 
       <div class="relative min-w-0 flex-1">
-        <div class="flex h-10 w-full items-stretch overflow-visible rounded bg-surface-container-high ring-1 ring-white/10 focus-within:ring-primary/60">
-          <button class="flex flex-none items-center gap-1 border-r border-white/10 px-3 text-on-surface-variant hover:bg-surface-container-highest" type="button" :aria-expanded="searchOpen" @click.stop="toggleSearch">
-            <span class="hidden text-sm font-bold sm:inline">{{ searchType.label }}</span>
-            <span class="material-symbols-outlined text-lg">arrow_drop_down</span>
+        <div class="flex h-8 w-full items-stretch overflow-visible rounded bg-surface-container-high ring-1 ring-white/10 focus-within:ring-primary/60">
+          <button class="flex flex-none items-center gap-0.5 border-r border-white/10 px-2.5 text-on-surface-variant hover:bg-surface-container-highest" type="button" :aria-expanded="searchOpen" @click.stop="toggleSearch">
+            <span class="hidden text-xs font-bold sm:inline">{{ searchType.label }}</span>
+            <span class="material-symbols-outlined text-base">arrow_drop_down</span>
           </button>
-          <input class="min-w-0 flex-1 border-0 bg-transparent px-3 text-sm text-on-surface outline-none placeholder:text-on-surface-variant focus:ring-0" :placeholder="`在 MOVIESCOPE ${searchType.hint}`" type="search">
-          <button class="flex w-11 flex-none items-center justify-center text-on-surface-variant hover:text-primary" type="button" aria-label="搜索">
-            <span class="material-symbols-outlined leading-none">search</span>
+          <input class="min-w-0 flex-1 border-0 bg-transparent px-2.5 text-xs text-on-surface outline-none placeholder:text-on-surface-variant focus:ring-0" :placeholder="`在 MOVIESCOPE ${searchType.hint}`" type="search">
+          <button class="flex w-9 flex-none items-center justify-center text-on-surface-variant hover:text-primary" type="button" aria-label="搜索">
+            <span class="material-symbols-outlined text-xl leading-none">search</span>
           </button>
         </div>
 
         <Transition name="dropdown">
-          <div v-if="searchOpen" class="absolute left-0 top-12 z-50 w-72 overflow-hidden rounded-lg border border-white/10 bg-[#1d1d1d] py-2 shadow-2xl">
-            <button v-for="type in searchTypes" :key="type.label" type="button" class="flex w-full items-center gap-4 px-5 py-3 text-left text-on-surface hover:bg-white/5" :class="{ 'text-primary': searchType.label === type.label }" @click="chooseSearchType(type)">
-              <span class="material-symbols-outlined">{{ type.icon }}</span>
+          <div v-if="searchOpen" class="absolute left-0 top-10 z-50 w-64 overflow-hidden rounded-lg border border-white/10 bg-[#1d1d1d] py-1.5 shadow-2xl">
+            <button v-for="type in searchTypes" :key="type.label" type="button" class="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-on-surface hover:bg-white/5" :class="{ 'text-primary': searchType.label === type.label }" @click="chooseSearchType(type)">
+              <span class="material-symbols-outlined text-xl">{{ type.icon }}</span>
               <span class="font-semibold">{{ type.label }}</span>
             </button>
             <div class="mt-2 border-t border-white/10 pt-2">
-              <a class="flex items-center gap-4 px-5 py-3 font-semibold text-on-surface hover:bg-white/5" href="#探索">
-                <span class="material-symbols-outlined">manage_search</span>
+              <a class="flex items-center gap-3 px-4 py-2 text-sm font-semibold text-on-surface hover:bg-white/5" href="#探索">
+                <span class="material-symbols-outlined text-xl">manage_search</span>
                 高级搜索
                 <span class="material-symbols-outlined ml-auto">chevron_right</span>
               </a>
@@ -114,18 +114,18 @@ onBeforeUnmount(() => {
         <span class="hidden font-bold md:inline">探索</span>
       </a>
       <button class="header-action hidden md:flex" type="button"><span class="font-bold">登录</span></button>
-      <button class="hidden rounded bg-primary-container px-4 py-2 text-sm font-black text-on-primary-container hover:brightness-105 lg:block" type="button">注册</button>
+      <button class="hidden h-8 rounded bg-primary-container px-3 text-xs font-black text-on-primary-container hover:brightness-105 lg:block" type="button">注册</button>
     </div>
 
     <Transition name="menu">
-      <div v-if="menuOpen" class="absolute inset-x-0 top-16 max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-white/10 bg-[#191919] shadow-2xl">
-        <div class="mx-auto grid max-w-[1280px] grid-cols-1 gap-x-14 gap-y-9 px-6 py-10 sm:grid-cols-2 lg:grid-cols-3">
+      <div v-if="menuOpen" class="absolute inset-x-0 top-12 max-h-[calc(100vh-3rem)] overflow-y-auto border-b border-white/10 bg-[#191919] shadow-2xl">
+        <div class="mx-auto grid max-w-[1120px] grid-cols-1 gap-x-10 gap-y-6 px-5 py-7 sm:grid-cols-2 lg:grid-cols-3">
           <section v-for="group in menuGroups" :key="group.title">
-            <h2 class="mb-4 flex items-center gap-3 text-xl font-extrabold text-on-surface">
-              <span class="material-symbols-outlined text-primary">{{ group.icon }}</span>
+            <h2 class="mb-2.5 flex items-center gap-2 text-base font-extrabold text-on-surface">
+              <span class="material-symbols-outlined text-xl text-primary">{{ group.icon }}</span>
               {{ group.title }}
             </h2>
-            <ul class="space-y-3 pl-9 text-on-surface-variant">
+            <ul class="space-y-2 pl-7 text-sm text-on-surface-variant">
               <li v-for="item in group.items" :key="item"><a href="#" class="hover:text-primary">{{ item }}</a></li>
             </ul>
           </section>
@@ -136,7 +136,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.header-action { display: flex; height: 40px; flex: none; align-items: center; gap: 6px; border-radius: 4px; padding: 0 10px; color: #e2e2e8; transition: background-color .2s, color .2s; }
+.header-action { display: flex; height: 32px; flex: none; align-items: center; gap: 4px; border-radius: 4px; padding: 0 8px; color: #e2e2e8; transition: background-color .2s, color .2s; }
 .header-action:hover { background: rgba(255, 255, 255, .08); color: #ffe5a0; }
 .dropdown-enter-active, .dropdown-leave-active { transition: opacity .16s ease, transform .16s ease; }
 .dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(-8px); }
