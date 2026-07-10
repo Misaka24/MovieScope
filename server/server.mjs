@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { loadEnv } from './env.mjs'
 import { getDatabase } from './database.mjs'
 import { getHomeData } from './home-service.mjs'
-import { discoverCatalog, getCatalogOptions, getPersonDetails, getTitleDetails, searchCatalog } from './catalog-service.mjs'
+import { discoverCatalog, getBrowsePage, getCatalogOptions, getIndustryNews, getPersonDetails, getPopularPeople, getTitleDetails, getWatchProviders, searchCatalog } from './catalog-service.mjs'
 
 loadEnv()
 
@@ -62,6 +62,7 @@ const server = createServer(async (request, response) => {
         year: params.year,
         minRating: params.rating,
         language: params.language,
+        provider: params.provider,
       })
       sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
       return
@@ -69,6 +70,30 @@ const server = createServer(async (request, response) => {
 
     if (request.method === 'GET' && url.pathname === '/api/v1/catalog/options') {
       const data = await getCatalogOptions()
+      sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
+      return
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/v1/browse') {
+      const data = await getBrowsePage(url.searchParams.get('preset'), url.searchParams.get('page'))
+      sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
+      return
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/v1/people/popular') {
+      const data = await getPopularPeople(url.searchParams.get('page'))
+      sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
+      return
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/v1/watch-providers') {
+      const data = await getWatchProviders()
+      sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
+      return
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/v1/news') {
+      const data = await getIndustryNews()
       sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
       return
     }

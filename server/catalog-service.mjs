@@ -1,4 +1,4 @@
-import { imdbApiDev, tmdb } from './providers.mjs'
+import { imdbApiDev, justOne, tmdb } from './providers.mjs'
 
 const imageFallback = 'https://placehold.co/600x900/1e2024/e2e2e8?text=MovieScope'
 const profileFallback = 'https://placehold.co/400x500/1e2024/e2e2e8?text=MovieScope'
@@ -143,6 +143,8 @@ export async function discoverCatalog(params) {
     'vote_average.gte': minRating || undefined,
     'vote_count.gte': minRating ? 100 : undefined,
     with_original_language: params.language || undefined,
+    with_watch_providers: params.provider || undefined,
+    watch_region: params.provider ? 'CN' : undefined,
   }
   if (yearValue) apiParams[mediaType === 'movie' ? 'primary_release_year' : 'first_air_date_year'] = yearValue
   const [response, genres] = await Promise.all([
@@ -151,7 +153,7 @@ export async function discoverCatalog(params) {
   ])
   const mapped = (response.results || []).map((item) => mediaSummary(item, genres[mediaType], mediaType))
   const results = await imdbRatingsFor(mapped.slice(0, 12))
-  return { mediaType, sortBy, filters: { genres: params.genres || '', year: yearValue, minRating, language: params.language || '' }, genres, ...pagination(response, results) }
+  return { mediaType, sortBy, filters: { genres: params.genres || '', year: yearValue, minRating, language: params.language || '', provider: params.provider || '' }, genres, ...pagination(response, results) }
 }
 
 function videoUrl(video) {
@@ -246,4 +248,80 @@ export async function getCatalogOptions() {
     genres,
     languages: (Array.isArray(languages) ? languages : []).filter((language) => language.iso_639_1).map((language) => ({ code: language.iso_639_1, name: language.name || language.english_name })),
   }
+}
+
+const browsePresets = {
+  'now-playing': { title: '正在上映', description: '当前院线正在上映的电影。', path: '/movie/now_playing', mediaType: 'movie', params: { region: 'CN' } },
+  upcoming: { title: '即将上映', description: '即将在院线与流媒体上线的电影。', path: '/movie/upcoming', mediaType: 'movie', params: { region: 'CN' } },
+  'popular-movies': { title: '热门电影', description: '近期最受观众关注的热门电影。', path: '/movie/popular', mediaType: 'movie' },
+  'top-movies': { title: '高分电影', description: '根据 TMDB 用户评分整理的高分电影。', path: '/movie/top_rated', mediaType: 'movie' },
+  'popular-tv': { title: '热门剧集', description: '近期热度持续上升的电视剧与网络剧。', path: '/tv/popular', mediaType: 'tv' },
+  'top-tv': { title: '高分剧集', description: '根据 TMDB 用户评分整理的高分剧集。', path: '/tv/top_rated', mediaType: 'tv' },
+  'airing-today': { title: '今日播出', description: '今天有新集数播出的剧集。', path: '/tv/airing_today', mediaType: 'tv', params: { timezone: 'Asia/Shanghai' } },
+  'trending-day': { title: '今日趋势', description: '过去一天内热度增长最快的影视作品。', path: '/trending/all/day', mediaType: 'multi' },
+  'trending-week': { title: '本周趋势', description: '过去一周内最受关注的影视作品。', path: '/trending/all/week', mediaType: 'multi' },
+}
+
+export async function getBrowsePage(preset, pageValue) {
+  const config = browsePresets[preset]
+  if (!config) throw new Error('不存在的榜单类型')
+  const page = Math.max(1, Math.min(500, number(pageValue, 1)))
+  const [response, genres] = await Promise.all([
+    tmdb(config.path, { language: 'zh-CN', page, ...(config.params || {}) }, 15 * 60 * 1000),
+    loadGenres(),
+  ])
+  const mapped = (response.results || [])
+    .filter((item) => item.media_type !== 'person')
+    .map((item) => {
+      const mediaType = config.mediaType === 'multi' ? mediaTypeOf(item) : config.mediaType
+      return mediaSummary(item, genres[mediaType] || [], mediaType)
+    })
+  const results = await imdbRatingsFor(mapped.slice(0, 12))
+  return { preset, title: config.title, description: config.description, ...pagination(response, results) }
+}
+
+export async function getPopularPeople(pageValue) {
+  const page = Math.max(1, Math.min(500, number(pageValue, 1)))
+  const response = await tmdb('/person/popular', { language: 'zh-CN', page }, 30 * 60 * 1000)
+  return pagination(response, (response.results || []).map(personSummary))
+}
+
+export async function getWatchProviders() {
+  const [movie, tv] = await Promise.all([
+    tmdb('/watch/providers/movie', { language: 'zh-CN' }, 7 * 24 * 60 * 60 * 1000),
+    tmdb('/watch/providers/tv', { language: 'zh-CN' }, 7 * 24 * 60 * 60 * 1000),
+  ])
+  const merged = new Map()
+  const regionalMovie = (movie.results || []).filter((item) => item.display_priorities?.CN != null || item.display_priorities?.HK != null || item.display_priorities?.TW != null)
+  const regionalTv = (tv.results || []).filter((item) => item.display_priorities?.CN != null || item.display_priorities?.HK != null || item.display_priorities?.TW != null)
+  for (const item of [...regionalMovie, ...regionalTv]) {
+    const existing = merged.get(item.provider_id)
+    merged.set(item.provider_id, {
+      id: item.provider_id,
+      name: item.provider_name,
+      logo: image(item.logo_path, 'w185', imageFallback),
+      displayPriority: Math.min(existing?.displayPriority ?? 9999, item.display_priorities?.CN ?? item.display_priorities?.HK ?? item.display_priorities?.TW ?? item.display_priority ?? 9999),
+      media: [...new Set([...(existing?.media || []), ...regionalMovie.some((value) => value.provider_id === item.provider_id) ? ['movie'] : [], ...regionalTv.some((value) => value.provider_id === item.provider_id) ? ['tv'] : []])],
+    })
+  }
+  return [...merged.values()].sort((left, right) => left.displayPriority - right.displayPriority)
+}
+
+function cleanNewsText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+export async function getIndustryNews() {
+  const response = await justOne('/api/imdb/news-by-category-query/v1', { category: 'MOVIE', languageCountry: 'en_US' }, 24 * 60 * 60 * 1000)
+  return (response.news?.edges || []).map((edge) => {
+    const node = edge.node || {}
+    return {
+      id: node.id || crypto.randomUUID(),
+      category: node.source?.homepage?.label || 'IMDb 新闻',
+      title: cleanNewsText(node.articleTitle?.plainText) || '影视行业动态',
+      summary: cleanNewsText(node.text?.plainText).slice(0, 260),
+      publishedAt: node.date || null,
+      url: node.externalUrl || null,
+    }
+  })
 }

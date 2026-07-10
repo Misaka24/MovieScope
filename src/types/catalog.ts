@@ -54,8 +54,13 @@ export interface SearchData extends CatalogPage<SearchResult> {
 export interface DiscoverData extends CatalogPage<CatalogMedia> {
   mediaType: MediaType
   sortBy: string
-  filters: { genres: string; year: number | null; minRating: number; language: string }
+  filters: { genres: string; year: number | null; minRating: number; language: string; provider: string }
 }
+
+export interface BrowseData extends CatalogPage<CatalogMedia> { preset: string; title: string; description: string }
+export type PeoplePageData = Omit<CatalogPage<CatalogPersonSummary>, 'genres'>
+export interface WatchProvider { id: number; name: string; logo: string; displayPriority: number; media: MediaType[] }
+export interface NewsItem { id: string; category: string; title: string; summary: string; publishedAt: string | null; url: string | null }
 
 export interface CreditPerson { id: number; name: string; profile: string; character?: string | null; job?: string; department?: string }
 export interface MediaImage { path: string; width: number; height: number }

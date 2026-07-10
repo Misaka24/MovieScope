@@ -15,6 +15,7 @@ const root = shallowRef<HTMLElement>()
 const query = shallowRef('')
 const router = useRouter()
 const route = useRoute()
+const notice = shallowRef('')
 
 const searchTypes: SearchType[] = [
   { label: '全部', icon: 'search', hint: '搜索电影、剧集、影人' },
@@ -48,14 +49,39 @@ function search() {
 
 function openMenuItem(group: string, item: string) {
   menuOpen.value = false
-  const movieItems = new Set(['正在上映', '即将上映', '热门电影', '高分电影', '按类型浏览'])
-  const tvItems = new Set(['热门剧集', '高分剧集', '今日播出', '剧集资讯'])
-  if (group === '探索' || item === '地区与年份' || item === '观看平台') return router.push({ name: 'explore' })
-  if (item === 'IMDb Top 250') return router.push({ name: 'home', hash: '#高分榜' })
-  if (group === '影人') return router.push({ name: 'search', query: { type: 'person', q: item.replace('作品', '') } })
-  if (movieItems.has(item)) return router.push({ name: 'explore', query: { media: 'movie' } })
-  if (tvItems.has(item)) return router.push({ name: 'explore', query: { media: 'tv' } })
-  return router.push({ name: 'search', query: { q: item, type: 'multi' } })
+  const routes: Record<string, Parameters<typeof router.push>[0]> = {
+    '电影/正在上映': { name: 'browse', params: { preset: 'now-playing' } },
+    '电影/即将上映': { name: 'browse', params: { preset: 'upcoming' } },
+    '电影/热门电影': { name: 'browse', params: { preset: 'popular-movies' } },
+    '电影/高分电影': { name: 'browse', params: { preset: 'top-movies' } },
+    '电影/按类型浏览': { name: 'explore', query: { media: 'movie' } },
+    '剧集/热门剧集': { name: 'browse', params: { preset: 'popular-tv' } },
+    '剧集/高分剧集': { name: 'browse', params: { preset: 'top-tv' } },
+    '剧集/今日播出': { name: 'browse', params: { preset: 'airing-today' } },
+    '剧集/按类型浏览': { name: 'explore', query: { media: 'tv' } },
+    '探索/今日趋势': { name: 'browse', params: { preset: 'trending-day' } },
+    '探索/本周趋势': { name: 'browse', params: { preset: 'trending-week' } },
+    '探索/观看平台': { name: 'providers' },
+    '探索/地区与年份': { name: 'explore' },
+    '榜单与活动/IMDb Top 250': { name: 'home', hash: '#高分榜' },
+    '榜单与活动/电影高分榜': { name: 'browse', params: { preset: 'top-movies' } },
+    '榜单与活动/剧集高分榜': { name: 'browse', params: { preset: 'top-tv' } },
+    '榜单与活动/奖项与票房': { name: 'explore', query: { media: 'movie', sort: 'revenue.desc' } },
+    '影人/热门影人': { name: 'people' },
+    '影人/导演与编剧': { name: 'people', query: { department: 'Directing' } },
+    '影人/演员作品': { name: 'people', query: { department: 'Acting' } },
+    '影人/人物资料': { name: 'people' },
+    '剧集/剧集资讯': { name: 'news' },
+    '资讯与社区/影坛动态': { name: 'news' },
+  }
+  const target = routes[`${group}/${item}`]
+  if (target) return router.push(target)
+  return router.push({ name: 'notice', query: { title: item, message: `${item}需要用户系统、社区数据或后续专题接口支持，当前尚未开放。` } })
+}
+
+function openAccount(title: string) {
+  notice.value = `${title}功能将在用户系统阶段接入。`
+  window.setTimeout(() => { notice.value = '' }, 2400)
 }
 
 function toggleMenu() {
@@ -123,22 +149,22 @@ onBeforeUnmount(() => {
               <span class="font-semibold">{{ type.label }}</span>
             </button>
             <div class="mt-2 border-t border-white/10 pt-2">
-              <a class="flex items-center gap-3 px-4 py-2 text-sm font-semibold text-on-surface hover:bg-white/5" href="#探索">
+              <RouterLink class="flex items-center gap-3 px-4 py-2 text-sm font-semibold text-on-surface hover:bg-white/5" to="/explore" @click="searchOpen=false">
                 <span class="material-symbols-outlined text-xl">manage_search</span>
                 高级搜索
                 <span class="material-symbols-outlined ml-auto">chevron_right</span>
-              </a>
+              </RouterLink>
             </div>
           </div>
         </Transition>
       </div>
 
-      <a class="header-action" href="#探索">
+      <RouterLink class="header-action" to="/explore">
         <span class="material-symbols-outlined text-xl">explore</span>
         <span class="hidden text-sm font-bold md:inline">探索</span>
-      </a>
-      <button class="header-action hidden md:flex" type="button"><span class="text-sm font-bold">登录</span></button>
-      <button class="hidden h-[34px] rounded bg-primary-container px-3.5 text-sm font-bold text-on-primary-container hover:brightness-105 lg:block" type="button">注册</button>
+      </RouterLink>
+      <button class="header-action hidden md:flex" type="button" @click="openAccount('登录')"><span class="text-sm font-bold">登录</span></button>
+      <button class="hidden h-[34px] rounded bg-primary-container px-3.5 text-sm font-bold text-on-primary-container hover:brightness-105 lg:block" type="button" @click="openAccount('注册')">注册</button>
     </div>
 
     <Transition name="menu">
@@ -156,6 +182,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </Transition>
+    <div v-if="notice" class="absolute right-4 top-[58px] rounded-lg border border-primary/25 bg-[#242424] px-4 py-3 text-xs font-semibold text-on-surface shadow-2xl" aria-live="polite">{{ notice }}</div>
   </header>
 </template>
 

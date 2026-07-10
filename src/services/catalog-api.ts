@@ -1,4 +1,4 @@
-import type { DiscoverData, PersonDetails, SearchData, TitleDetails } from '../types/catalog'
+import type { BrowseData, DiscoverData, NewsItem, PeoplePageData, PersonDetails, SearchData, TitleDetails, WatchProvider } from '../types/catalog'
 
 interface ApiResponse<T> { data: T | null; error: { code: string; message: string } | null }
 
@@ -27,3 +27,7 @@ export const fetchSearch = (params: Record<string, string | number | null | unde
 export const fetchDiscover = (params: Record<string, string | number | null | undefined>) => request<DiscoverData>(`/api/v1/discover?${queryString(params)}`)
 export const fetchTitle = (type: string, id: string | number) => request<TitleDetails>(`/api/v1/titles/${type}/${id}`)
 export const fetchPerson = (id: string | number) => request<PersonDetails>(`/api/v1/people/${id}`)
+export const fetchBrowse = (preset: string, page: number) => request<BrowseData>(`/api/v1/browse?${queryString({ preset, page })}`)
+export const fetchPopularPeople = (page: number) => request<PeoplePageData>(`/api/v1/people/popular?${queryString({ page })}`)
+export const fetchWatchProviders = () => request<WatchProvider[]>('/api/v1/watch-providers')
+export const fetchNews = () => request<NewsItem[]>('/api/v1/news')
