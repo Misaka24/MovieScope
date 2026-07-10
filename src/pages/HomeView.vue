@@ -14,7 +14,7 @@ const { data, loading, error, partialFailures, reload } = useHomeData()
     <GlobalHeader />
     <main>
       <HomeHeroCarousel :items="data?.hero || []" :loading="loading" />
-      <div id="探索" class="mx-auto max-w-[1180px] px-4 py-5 md:px-7">
+      <div id="探索" class="mx-auto max-w-[1216px] px-4 py-6 md:px-8">
         <div v-if="error" class="my-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-error/40 bg-error-container/20 p-3 text-sm text-on-error-container"><span>{{ error }}</span><button class="rounded bg-primary-container px-3 py-1.5 text-xs font-bold text-on-primary-container" type="button" @click="reload">重新加载</button></div>
         <div v-else-if="partialFailures.length" class="my-4 rounded-lg border border-primary/20 bg-primary/5 p-2.5 text-xs text-on-surface-variant">部分内容暂时不可用，页面已展示其他可用内容。</div>
         <template v-if="data">

@@ -24,16 +24,16 @@ function primaryRating(movie: HeroMovie) {
       <div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-black/20"></div>
       <div v-if="imageLoading" class="absolute inset-0 animate-pulse bg-surface-container-lowest/55"></div>
 
-      <div class="relative z-10 mx-auto flex h-full max-w-[1180px] items-end px-4 pb-14 pt-14 md:px-7 md:pb-16">
+      <div class="relative z-10 mx-auto flex h-full max-w-[1216px] items-end px-4 pb-16 pt-14 md:px-8 md:pb-[68px]">
         <Transition name="hero-copy" appear>
-          <div :key="activeMovie.id" class="max-w-[640px]">
-            <div class="mb-3 flex flex-wrap gap-1.5"><span v-for="genre in activeMovie.genres.slice(0, 2)" :key="genre" class="rounded border border-primary/35 bg-black/40 px-2.5 py-0.5 font-label-caps text-[9px] font-bold text-primary backdrop-blur-md">{{ genre }}</span></div>
+          <div :key="activeMovie.id" class="max-w-[680px]">
+            <div class="mb-3.5 flex flex-wrap gap-1.5"><span v-for="genre in activeMovie.genres.slice(0, 2)" :key="genre" class="rounded border border-primary/35 bg-black/40 px-2.5 py-0.5 font-label-caps text-[10px] font-bold text-primary backdrop-blur-md">{{ genre }}</span></div>
             <h1 class="text-3xl font-extrabold leading-tight text-white md:text-5xl lg:text-6xl">{{ activeMovie.title }}</h1>
-            <div class="mt-3.5 flex flex-wrap items-center gap-3 text-xs font-semibold text-on-surface-variant">
+            <div class="mt-4 flex flex-wrap items-center gap-3.5 text-[13px] font-semibold text-on-surface-variant">
               <span>{{ activeMovie.year || '年份暂无' }}</span><span>{{ primaryRating(activeMovie) }}</span>
             </div>
-            <p class="mt-3.5 max-w-xl text-sm leading-6 text-on-surface-variant md:text-[15px]">{{ activeMovie.overview }}</p>
-            <div class="mt-5 flex flex-wrap gap-2"><button class="flex h-9 items-center gap-1.5 rounded bg-primary-container px-4 text-sm font-extrabold text-on-primary-container" type="button"><span class="material-symbols-outlined text-lg">info</span>查看详情</button><a class="flex h-9 items-center gap-1.5 rounded border border-white/20 bg-black/30 px-4 text-sm font-bold text-white backdrop-blur-md" href="#正在上映"><span class="material-symbols-outlined text-lg">explore</span>开始探索</a></div>
+            <p class="mt-4 max-w-[620px] text-[15px] leading-[25px] text-on-surface-variant md:text-base">{{ activeMovie.overview }}</p>
+            <div class="mt-6 flex flex-wrap gap-2.5"><button class="flex h-10 items-center gap-1.5 rounded bg-primary-container px-4.5 text-[15px] font-extrabold text-on-primary-container" type="button"><span class="material-symbols-outlined text-xl">info</span>查看详情</button><a class="flex h-10 items-center gap-1.5 rounded border border-white/20 bg-black/30 px-4.5 text-[15px] font-bold text-white backdrop-blur-md" href="#正在上映"><span class="material-symbols-outlined text-xl">explore</span>开始探索</a></div>
           </div>
         </Transition>
       </div>

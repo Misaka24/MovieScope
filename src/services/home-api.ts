@@ -6,8 +6,14 @@ interface ApiResponse<T> {
 }
 
 export async function fetchHomeData(): Promise<HomeData> {
-  const response = await fetch('/api/v1/home', { headers: { Accept: 'application/json' } })
+  let response: Response
+  try {
+    response = await fetch('/api/v1/home', { headers: { Accept: 'application/json' } })
+  } catch {
+    throw new Error('API 服务未启动或网络不可用，请启动后端服务后重试')
+  }
   const rawBody = await response.text()
+  if ([502, 503, 504].includes(response.status)) throw new Error('API 服务未启动或暂时不可用，请稍后重试')
   if (!rawBody.trim()) throw new Error(response.ok ? '服务器返回了空响应' : `服务器请求失败（${response.status}）`)
   let body: ApiResponse<HomeData>
   try {

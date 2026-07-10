@@ -70,8 +70,8 @@ onBeforeUnmount(() => {
 
 <template>
   <header ref="root" class="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#121212] shadow-2xl">
-    <div class="mx-auto flex h-12 w-full max-w-[1180px] items-center gap-1.5 px-3 md:px-5 lg:px-7">
-      <a href="/" class="flex-none rounded bg-primary-container px-2 py-1.5 text-[9px] font-black leading-none text-on-primary-container shadow-sm">
+    <div class="mx-auto flex h-[50px] w-full max-w-[1216px] items-center gap-2 px-3 md:px-6 lg:px-8">
+      <a href="/" class="flex-none rounded bg-primary-container px-2.5 py-1.5 text-[9.5px] font-black leading-none text-on-primary-container shadow-sm">
         MOVIE<br>SCOPE
       </a>
 
@@ -81,12 +81,12 @@ onBeforeUnmount(() => {
       </button>
 
       <div class="relative min-w-0 flex-1">
-        <div class="flex h-8 w-full items-stretch overflow-visible rounded bg-surface-container-high ring-1 ring-white/10 focus-within:ring-primary/60">
+        <div class="flex h-[34px] w-full items-stretch overflow-visible rounded bg-surface-container-high ring-1 ring-white/10 focus-within:ring-primary/60">
           <button class="flex flex-none items-center gap-0.5 border-r border-white/10 px-2.5 text-on-surface-variant hover:bg-surface-container-highest" type="button" :aria-expanded="searchOpen" @click.stop="toggleSearch">
-            <span class="hidden text-xs font-bold sm:inline">{{ searchType.label }}</span>
+            <span class="hidden text-[13px] font-bold sm:inline">{{ searchType.label }}</span>
             <span class="material-symbols-outlined text-base">arrow_drop_down</span>
           </button>
-          <input class="min-w-0 flex-1 border-0 bg-transparent px-2.5 text-xs text-on-surface outline-none placeholder:text-on-surface-variant focus:ring-0" :placeholder="`在 MOVIESCOPE ${searchType.hint}`" type="search">
+          <input class="min-w-0 flex-1 border-0 bg-transparent px-3 text-[13px] text-on-surface outline-none placeholder:text-on-surface-variant focus:ring-0" :placeholder="`在 MOVIESCOPE ${searchType.hint}`" type="search">
           <button class="flex w-9 flex-none items-center justify-center text-on-surface-variant hover:text-primary" type="button" aria-label="搜索">
             <span class="material-symbols-outlined text-xl leading-none">search</span>
           </button>
@@ -114,11 +114,11 @@ onBeforeUnmount(() => {
         <span class="hidden font-bold md:inline">探索</span>
       </a>
       <button class="header-action hidden md:flex" type="button"><span class="font-bold">登录</span></button>
-      <button class="hidden h-8 rounded bg-primary-container px-3 text-xs font-black text-on-primary-container hover:brightness-105 lg:block" type="button">注册</button>
+      <button class="hidden h-[34px] rounded bg-primary-container px-3.5 text-[13px] font-black text-on-primary-container hover:brightness-105 lg:block" type="button">注册</button>
     </div>
 
     <Transition name="menu">
-      <div v-if="menuOpen" class="absolute inset-x-0 top-12 max-h-[calc(100vh-3rem)] overflow-y-auto border-b border-white/10 bg-[#191919] shadow-2xl">
+      <div v-if="menuOpen" class="absolute inset-x-0 top-[50px] max-h-[calc(100vh-50px)] overflow-y-auto border-b border-white/10 bg-[#191919] shadow-2xl">
         <div class="mx-auto grid max-w-[1120px] grid-cols-1 gap-x-10 gap-y-6 px-5 py-7 sm:grid-cols-2 lg:grid-cols-3">
           <section v-for="group in menuGroups" :key="group.title">
             <h2 class="mb-2.5 flex items-center gap-2 text-base font-extrabold text-on-surface">
@@ -136,7 +136,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.header-action { display: flex; height: 32px; flex: none; align-items: center; gap: 4px; border-radius: 4px; padding: 0 8px; color: #e2e2e8; transition: background-color .2s, color .2s; }
+.header-action { display: flex; height: 34px; flex: none; align-items: center; gap: 5px; border-radius: 4px; padding: 0 9px; color: #e2e2e8; transition: background-color .2s, color .2s; }
 .header-action:hover { background: rgba(255, 255, 255, .08); color: #ffe5a0; }
 .dropdown-enter-active, .dropdown-leave-active { transition: opacity .16s ease, transform .16s ease; }
 .dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(-8px); }
