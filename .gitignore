@@ -7,3 +7,5 @@ dist/
 !.env.example
 .data/
 *.log
+api-cache-export.json
+cache-review.json

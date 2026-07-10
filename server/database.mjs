@@ -22,6 +22,7 @@ async function createDatabase() {
   return {
     query: (text, values = []) => db.query(text, values),
     close: () => db.close(),
+    dumpDataDir: (compression = 'gzip') => db.dumpDataDir(compression),
     mode: 'pglite',
   }
 }

@@ -8,7 +8,13 @@ const { movies, activeIndex, activeMovie, imageLoading, select, markLoaded } = u
 const ready = computed(() => Boolean(activeMovie.value))
 
 function ratingLabel(value: number | null) {
-  return value == null ? '暂无' : value.toFixed(1)
+  return value == null ? '未收录' : value.toFixed(1)
+}
+
+function primaryRating(movie: HeroMovie) {
+  if (movie.ratings.imdb != null) return `IMDb ${movie.ratings.imdb.toFixed(1)}`
+  if (movie.ratings.tmdb != null) return `TMDB ${movie.ratings.tmdb.toFixed(1)}`
+  return '评分未收录'
 }
 </script>
 
@@ -28,7 +34,7 @@ function ratingLabel(value: number | null) {
             <div class="mb-5 flex flex-wrap gap-2"><span v-for="genre in activeMovie.genres.slice(0, 2)" :key="genre" class="rounded border border-primary/35 bg-black/40 px-3 py-1 font-label-caps text-[11px] font-bold text-primary backdrop-blur-md">{{ genre }}</span></div>
             <h1 class="text-4xl font-extrabold leading-tight text-white md:text-6xl lg:text-7xl">{{ activeMovie.title }}</h1>
             <div class="mt-5 flex flex-wrap items-center gap-4 text-sm font-semibold text-on-surface-variant">
-              <span>{{ activeMovie.year || '年份暂无' }}</span><span>IMDb {{ ratingLabel(activeMovie.ratings.imdb) }}</span><span>豆瓣 {{ ratingLabel(activeMovie.ratings.douban) }}</span>
+              <span>{{ activeMovie.year || '年份暂无' }}</span><span>{{ primaryRating(activeMovie) }}</span><span>豆瓣 {{ ratingLabel(activeMovie.ratings.douban) }}</span>
             </div>
             <p class="mt-5 max-w-2xl text-base leading-7 text-on-surface-variant md:text-lg">{{ activeMovie.overview }}</p>
             <div class="mt-8 flex flex-wrap gap-3"><button class="flex items-center gap-2 rounded bg-primary-container px-6 py-3 font-extrabold text-on-primary-container" type="button"><span class="material-symbols-outlined">info</span>查看详情</button><a class="flex items-center gap-2 rounded border border-white/20 bg-black/30 px-6 py-3 font-bold text-white backdrop-blur-md" href="#正在上映"><span class="material-symbols-outlined">explore</span>开始探索</a></div>

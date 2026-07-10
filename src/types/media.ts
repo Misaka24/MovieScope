@@ -4,6 +4,8 @@ export interface RatingSet {
   tmdb: number | null
 }
 
+export type RatingDisplayMode = 'official' | 'tmdb-fallback' | 'pending' | 'unavailable'
+
 export interface MediaItem {
   id: string
   sourceId: string | number
@@ -15,6 +17,10 @@ export interface MediaItem {
   backdrop: string | null
   overview: string
   ratings: RatingSet
+  ratingDisplay: {
+    imdb: RatingDisplayMode
+    douban: RatingDisplayMode
+  }
   sources: string[]
   rank?: number | null
 }

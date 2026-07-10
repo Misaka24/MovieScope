@@ -54,9 +54,16 @@ function toTmdbMedia(item, mediaType, genreMap) {
     poster: tmdbImage(item.poster_path, 'w500', imageFallback),
     backdrop: tmdbImage(item.backdrop_path, 'original', backdropFallback),
     overview: item.overview || '暂无中文简介。',
-    ratings: { imdb: null, douban: null, tmdb: Number(item.vote_average || 0) || null },
+    ratings: { imdb: null, douban: null, tmdb: Number(item.vote_count || 0) > 0 ? Number(item.vote_average || 0) || null : null },
+    ratingDisplay: { imdb: 'pending', douban: 'unavailable' },
     sources: ['tmdb'],
   }
+}
+
+function tmdbTitles(item) {
+  return [item.title, item.name, item.original_title, item.original_name]
+    .map(normalizeTitle)
+    .filter(Boolean)
 }
 
 function parseDoubanGenres(subtitle) {
@@ -76,6 +83,7 @@ function toDoubanMedia(item) {
     backdrop: null,
     overview: item.episodes_info ? fixMojibake(item.episodes_info) : '',
     ratings: { imdb: null, douban: Number(item.rating?.value || 0) || null, tmdb: null },
+    ratingDisplay: { imdb: 'unavailable', douban: 'official' },
     sources: ['douban'],
   }
 }
@@ -93,15 +101,16 @@ function toImdbMedia(edge) {
     backdrop: null,
     overview: '',
     ratings: { imdb: Number(item.ratingsSummary?.aggregateRating || edge?.node?.chartRating || 0) || null, douban: null, tmdb: null },
+    ratingDisplay: { imdb: 'official', douban: 'unavailable' },
     rank: item.ratingsSummary?.topRanking?.rank || null,
     sources: ['imdb'],
   }
 }
 
-function mergeRatings(primary, candidates) {
-  const title = normalizeTitle(primary.title)
+function mergeRatings(primary, candidates, alternateTitles = []) {
+  const titles = new Set([primary.title, ...alternateTitles].map(normalizeTitle).filter(Boolean))
   const matched = candidates.find((candidate) => {
-    if (normalizeTitle(candidate.title) !== title) return false
+    if (!titles.has(normalizeTitle(candidate.title))) return false
     if (!primary.year || !candidate.year) return true
     return Math.abs(primary.year - candidate.year) <= 1
   })
@@ -113,8 +122,71 @@ function mergeRatings(primary, candidates) {
       imdb: primary.ratings.imdb ?? matched.ratings.imdb,
       douban: primary.ratings.douban ?? matched.ratings.douban,
     },
+    ratingDisplay: {
+      ...primary.ratingDisplay,
+      douban: matched.ratings.douban ? 'official' : primary.ratingDisplay.douban,
+    },
     sources: [...new Set([...primary.sources, ...matched.sources])],
   }
+}
+
+async function enrichImdbRating(media) {
+  try {
+    const external = await tmdb(`/${media.mediaType}/${media.sourceId}/external_ids`, {}, 7 * 24 * 60 * 60 * 1000)
+    if (!external.imdb_id) return { ...media, ratingDisplay: { ...media.ratingDisplay, imdb: 'tmdb-fallback' } }
+    const data = await justOne(
+      '/api/imdb/title-user-reviews-summary-query/v1',
+      { id: external.imdb_id, languageCountry: 'en_US' },
+      24 * 60 * 60 * 1000,
+    )
+    const imdbRating = Number(data.title?.ratingsSummary?.aggregateRating || 0) || null
+    return {
+      ...media,
+      ratings: { ...media.ratings, imdb: imdbRating },
+      ratingDisplay: { ...media.ratingDisplay, imdb: imdbRating ? 'official' : 'unavailable' },
+      sources: imdbRating ? [...new Set([...media.sources, 'imdb'])] : media.sources,
+    }
+  } catch {
+    return { ...media, ratingDisplay: { ...media.ratingDisplay, imdb: 'tmdb-fallback' } }
+  }
+}
+
+async function enrichImdbRatings(items, enabled = true) {
+  if (!enabled) {
+    return items.map((item) => ({
+      ...item,
+      ratingDisplay: { ...item.ratingDisplay, imdb: 'tmdb-fallback' },
+    }))
+  }
+  return Promise.all(items.map(enrichImdbRating))
+}
+
+async function enrichUniqueImdbRatings(groups, enabled) {
+  const unique = new Map()
+  for (const items of groups) {
+    for (const item of items) unique.set(`${item.mediaType}:${item.sourceId}`, item)
+  }
+  const enriched = await enrichImdbRatings([...unique.values()], enabled)
+  const lookup = new Map(enriched.map((item) => [`${item.mediaType}:${item.sourceId}`, item]))
+  return groups.map((items) => items.map((item) => lookup.get(`${item.mediaType}:${item.sourceId}`) || item))
+}
+
+async function loadDoubanHot(mediaType) {
+  const path = mediaType === 'tv'
+    ? '/api/douban/get-recent-hot-tv/v1'
+    : '/api/douban/get-recent-hot-movie/v1'
+  const pages = []
+  for (const page of [1, 2, 3]) {
+    try {
+      pages.push({ status: 'fulfilled', value: await justOne(path, { page }, 60 * 60 * 1000) })
+    } catch (reason) {
+      pages.push({ status: 'rejected', reason })
+      if (reason instanceof Error && reason.message.includes('INSUFFICIENT BALANCE')) break
+    }
+  }
+  const fulfilled = pages.filter((page) => page.status === 'fulfilled')
+  if (!fulfilled.length) throw pages[0]?.reason || new Error('豆瓣热门数据不可用')
+  return fulfilled.flatMap((page) => page.value.items || [])
 }
 
 async function loadGenres() {
@@ -133,24 +205,6 @@ async function safeSource(name, loader) {
     return { name, status: 'ok', data: await loader() }
   } catch (error) {
     return { name, status: 'error', error: error instanceof Error ? error.message : String(error), data: null }
-  }
-}
-
-async function enrichHero(movie, genreMap) {
-  try {
-    const external = await tmdb(`/movie/${movie.sourceId}/external_ids`, {}, 7 * 24 * 60 * 60 * 1000)
-    if (!external.imdb_id) return movie
-    const data = await justOne('/api/imdb/title-redux-overview-query/v1', { id: external.imdb_id, languageCountry: 'zh_CN' }, 24 * 60 * 60 * 1000)
-    const title = data.title || {}
-    return {
-      ...movie,
-      title: movie.title || fixMojibake(title.titleText?.text),
-      ratings: { ...movie.ratings, imdb: Number(title.ratingsSummary?.aggregateRating || 0) || null },
-      genres: movie.genres.length ? movie.genres : genreNames(title.genres?.genres?.map((genre) => genre.id), genreMap),
-      sources: [...new Set([...movie.sources, 'imdb'])],
-    }
-  } catch {
-    return movie
   }
 }
 
@@ -173,28 +227,40 @@ export async function getHomeData() {
     safeSource('tmdb-now-playing', () => tmdb('/movie/now_playing', { language: 'zh-CN', page: 1, region: 'CN' })),
     safeSource('tmdb-popular-movies', () => tmdb('/movie/popular', { language: 'zh-CN', page: 1, region: 'CN' })),
     safeSource('tmdb-popular-tv', () => tmdb('/tv/popular', { language: 'zh-CN', page: 1 })),
+    safeSource('tmdb-top-rated', () => tmdb('/movie/top_rated', { language: 'zh-CN', page: 1, region: 'CN' }, 60 * 60 * 1000)),
     safeSource('tmdb-trending', () => tmdb('/trending/movie/week', { language: 'zh-CN' })),
-    safeSource('douban-hot-movies', () => justOne('/api/douban/get-recent-hot-movie/v1', { page: 1 })),
-    safeSource('douban-hot-tv', () => justOne('/api/douban/get-recent-hot-tv/v1', { page: 1 })),
-    safeSource('imdb-top-250', () => justOne('/api/imdb/title-chart-rankings/v1', { rankingsChartType: 'TOP_250', languageCountry: 'zh_CN' }, 60 * 60 * 1000)),
-    safeSource('imdb-news', () => justOne('/api/imdb/news-by-category-query/v1', { category: 'MOVIE', languageCountry: 'zh_CN' }, 30 * 60 * 1000)),
+    safeSource('douban-hot-movies', () => loadDoubanHot('movie')),
+    safeSource('douban-hot-tv', () => loadDoubanHot('tv')),
+    safeSource('imdb-top-250', () => justOne('/api/imdb/title-chart-rankings/v1', { rankingsChartType: 'TOP_250', languageCountry: 'en_US' }, 60 * 60 * 1000)),
+    safeSource('imdb-news', () => justOne('/api/imdb/news-by-category-query/v1', { category: 'MOVIE', languageCountry: 'en_US' }, 30 * 60 * 1000)),
   ])
 
   const source = (name) => sources.find((item) => item.name === name)
-  const doubanMovies = (source('douban-hot-movies')?.data?.items || []).map(toDoubanMedia)
-  const doubanTv = (source('douban-hot-tv')?.data?.items || []).map(toDoubanMedia)
+  const doubanMovies = (source('douban-hot-movies')?.data || []).map(toDoubanMedia)
+  const doubanTv = (source('douban-hot-tv')?.data || []).map(toDoubanMedia)
   const imdbTop = (source('imdb-top-250')?.data?.titleChartRankings?.edges || []).map(toImdbMedia)
-  const nowPlaying = (source('tmdb-now-playing')?.data?.results || []).map((item) => toTmdbMedia(item, 'movie', genres.movie)).slice(0, 6).map((item) => mergeRatings(item, doubanMovies))
-  const popularMovies = (source('tmdb-popular-movies')?.data?.results || []).map((item) => toTmdbMedia(item, 'movie', genres.movie)).slice(0, 6).map((item) => mergeRatings(item, doubanMovies))
-  const popularTvTmdb = (source('tmdb-popular-tv')?.data?.results || []).map((item) => toTmdbMedia(item, 'tv', genres.tv)).slice(0, 6).map((item) => mergeRatings(item, doubanTv))
-  const popularTv = popularTvTmdb.length ? popularTvTmdb : doubanTv.slice(0, 6)
-  const trending = sample(
-    (source('tmdb-trending')?.data?.results || [])
-      .map((item) => toTmdbMedia(item, 'movie', genres.movie))
-      .filter((item) => item.backdrop && item.title),
-    5,
+  const justOneBalanceAvailable = !sources.some((item) => item.error?.includes('INSUFFICIENT BALANCE'))
+  const imdbAvailable = source('imdb-top-250')?.status === 'ok' && justOneBalanceAvailable
+  const nowPlayingRaw = (source('tmdb-now-playing')?.data?.results || []).slice(0, 6)
+  const popularMoviesRaw = (source('tmdb-popular-movies')?.data?.results || []).slice(0, 6)
+  const popularTvRaw = (source('tmdb-popular-tv')?.data?.results || []).slice(0, 6)
+  const nowPlayingBase = nowPlayingRaw.map((item) => mergeRatings(toTmdbMedia(item, 'movie', genres.movie), doubanMovies, tmdbTitles(item)))
+  const popularMoviesBase = popularMoviesRaw.map((item) => mergeRatings(toTmdbMedia(item, 'movie', genres.movie), doubanMovies, tmdbTitles(item)))
+  const popularTvBase = popularTvRaw.map((item) => mergeRatings(toTmdbMedia(item, 'tv', genres.tv), doubanTv, tmdbTitles(item)))
+  const trending = sample(source('tmdb-trending')?.data?.results || [], 5)
+    .map((item) => mergeRatings(toTmdbMedia(item, 'movie', genres.movie), doubanMovies, tmdbTitles(item)))
+    .filter((item) => item.backdrop && item.title)
+  const [nowPlaying, popularMovies, popularTvTmdb, hero] = await enrichUniqueImdbRatings(
+    [nowPlayingBase, popularMoviesBase, popularTvBase, trending],
+    imdbAvailable,
   )
-  const hero = await Promise.all(trending.map((movie) => enrichHero(movie, genres.movie)))
+  const popularTv = popularTvTmdb.length ? popularTvTmdb : doubanTv.slice(0, 6)
+  const tmdbTopRated = (source('tmdb-top-rated')?.data?.results || [])
+    .slice(0, 6)
+    .map((item) => ({
+      ...mergeRatings(toTmdbMedia(item, 'movie', genres.movie), doubanMovies, tmdbTitles(item)),
+      ratingDisplay: { imdb: 'tmdb-fallback', douban: 'unavailable' },
+    }))
   const news = (source('imdb-news')?.data?.news?.edges || []).slice(0, 3).map(toNews)
 
   return {
@@ -202,7 +268,7 @@ export async function getHomeData() {
     hero,
     sections: {
       nowPlaying,
-      topRated: imdbTop.slice(0, 6),
+      topRated: imdbTop.length ? imdbTop.slice(0, 6) : tmdbTopRated,
       popularMovies,
       popularTv,
       news,

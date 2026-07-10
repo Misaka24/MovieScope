@@ -9,7 +9,9 @@
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "vue-tsc -b",
     "api": "node server/server.mjs",
-    "dev:all": "node scripts/dev.mjs"
+    "dev:all": "node scripts/dev.mjs",
+    "cache:inspect": "node scripts/inspect-cache.mjs",
+    "cache:export": "node scripts/export-cache.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.14",

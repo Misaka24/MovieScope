@@ -3,6 +3,11 @@ import { cachedSql } from './cache.mjs'
 const TMDB_BASE = 'https://api.themoviedb.org/3'
 const JUSTONE_BASE = process.env.JUSTONE_API_BASE_URL || 'https://api.justoneapi.com'
 const requestTimeout = Number(process.env.API_TIMEOUT_MS || 25000)
+const retryableBusinessCodes = new Set([301, 302, 303, 500, 600, 602])
+
+function delay(ms) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms))
+}
 
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, { ...options, signal: AbortSignal.timeout(requestTimeout) })
@@ -46,9 +51,15 @@ export async function justOne(path, params = {}, ttlMs = 30 * 60 * 1000) {
     operation: path,
     ttlMs,
     loader: async () => {
-      const response = await fetchJson(url)
-      if (response.code !== 0) throw new Error(response.message || `Just One API 业务错误 ${response.code}`)
-      return response.data
+      let lastResponse
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const response = await fetchJson(url)
+        lastResponse = response
+        if (response.code === 0) return response.data
+        if (!retryableBusinessCodes.has(response.code) || attempt === 2) break
+        await delay(350 * (attempt + 1))
+      }
+      throw new Error(lastResponse?.message || `Just One API 业务错误 ${lastResponse?.code}`)
     },
   })
   return { ...result.value, _cache: result.cache }

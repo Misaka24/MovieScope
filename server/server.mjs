@@ -52,3 +52,16 @@ await getDatabase()
 server.listen(port, '127.0.0.1', () => {
   console.log(`MovieScope API: http://127.0.0.1:${port}`)
 })
+
+let closing = false
+async function shutdown() {
+  if (closing) return
+  closing = true
+  await new Promise((resolveClose) => server.close(resolveClose))
+  const db = await getDatabase()
+  await db.close()
+  process.exit(0)
+}
+
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
