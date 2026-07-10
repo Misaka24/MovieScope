@@ -6,10 +6,7 @@ export default defineConfig({
   plugins: [vue()],
   build: {
     rollupOptions: {
-      input: {
-        homeOne: resolve(__dirname, 'home-1.html'),
-        homeTwo: resolve(__dirname, 'home-2.html'),
-      },
+      input: resolve(__dirname, 'index.html'),
     },
   },
 })
