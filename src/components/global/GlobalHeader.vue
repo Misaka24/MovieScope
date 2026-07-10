@@ -110,11 +110,11 @@ onBeforeUnmount(() => {
       </div>
 
       <a class="header-action" href="#探索">
-        <span class="material-symbols-outlined">explore</span>
-        <span class="hidden font-bold md:inline">探索</span>
+        <span class="material-symbols-outlined text-xl">explore</span>
+        <span class="hidden text-sm font-bold md:inline">探索</span>
       </a>
-      <button class="header-action hidden md:flex" type="button"><span class="font-bold">登录</span></button>
-      <button class="hidden h-[34px] rounded bg-primary-container px-3.5 text-[13px] font-black text-on-primary-container hover:brightness-105 lg:block" type="button">注册</button>
+      <button class="header-action hidden md:flex" type="button"><span class="text-sm font-bold">登录</span></button>
+      <button class="hidden h-[34px] rounded bg-primary-container px-3.5 text-sm font-bold text-on-primary-container hover:brightness-105 lg:block" type="button">注册</button>
     </div>
 
     <Transition name="menu">
