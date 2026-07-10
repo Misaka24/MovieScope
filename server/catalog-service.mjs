@@ -169,12 +169,21 @@ function creditsData(credits) {
   }
 }
 
+function uniqueImages(items, size, fallback) {
+  const seen = new Set()
+  return (items || []).filter((item) => {
+    if (!item.file_path || seen.has(item.file_path)) return false
+    seen.add(item.file_path)
+    return true
+  }).map((item) => ({ path: image(item.file_path, size, fallback), width: item.width, height: item.height }))
+}
+
 export async function getTitleDetails(mediaType, id) {
   if (!['movie', 'tv'].includes(mediaType)) throw new Error('不支持的影视类型')
   const append = mediaType === 'movie'
     ? 'credits,videos,images,external_ids,recommendations,similar,watch/providers,release_dates,keywords,reviews'
     : 'credits,videos,images,external_ids,recommendations,similar,watch/providers,content_ratings,keywords,reviews'
-  const details = await tmdb(`/${mediaType}/${id}`, { language: 'zh-CN', append_to_response: append, include_image_language: 'zh,null' }, 6 * 60 * 60 * 1000)
+  const details = await tmdb(`/${mediaType}/${id}`, { language: 'zh-CN', append_to_response: append, include_image_language: 'zh,en,null' }, 6 * 60 * 60 * 1000)
   const external = details.external_ids || {}
   const imdb = await imdbDetails(external.imdb_id)
   const releaseDates = mediaType === 'movie' ? details.release_dates?.results || [] : details.content_ratings?.results || []
@@ -206,13 +215,30 @@ export async function getTitleDetails(mediaType, id) {
     seasons: details.seasons?.map((season) => ({ id: season.id, number: season.season_number, name: season.name, episodes: season.episode_count, airDate: season.air_date, poster: image(season.poster_path, 'w342') })) || [],
     credits,
     videos: (details.videos?.results || []).map((video) => ({ id: video.id, name: video.name, type: video.type, official: Boolean(video.official), url: videoUrl(video), key: video.key, site: video.site })).filter((video) => video.url),
-    images: (details.images?.backdrops || []).slice(0, 12).map((item) => ({ path: image(item.file_path, 'w1280', backdropFallback), width: item.width, height: item.height })),
+    images: uniqueImages(details.images?.backdrops, 'w1280', backdropFallback).slice(0, 24),
+    posters: uniqueImages(details.images?.posters, 'w500', imageFallback).slice(0, 12),
+    logos: uniqueImages(details.images?.logos, 'w500', imageFallback).slice(0, 8),
     recommendations: (details.recommendations?.results || []).slice(0, 12).map((item) => mediaSummary(item, [], mediaType)),
     similar: (details.similar?.results || []).slice(0, 12).map((item) => mediaSummary(item, [], mediaType)),
     reviews: (details.reviews?.results || []).slice(0, 8).map((review) => ({ id: review.id, author: review.author, content: review.content, createdAt: review.created_at, rating: number(review.author_details?.rating) })),
     keywords: (details.keywords?.keywords || details.keywords?.results || []).map((keyword) => ({ id: keyword.id, name: keyword.name })),
     watchProviders: providers ? { link: providers.link, flatrate: providers.flatrate || [], rent: providers.rent || [], buy: providers.buy || [] } : null,
+    createdBy: details.created_by?.map((person) => ({ id: person.id, name: person.name })) || [],
+    numberOfSeasons: number(details.number_of_seasons),
+    numberOfEpisodes: number(details.number_of_episodes),
+    lastAirDate: details.last_air_date || null,
+    nextEpisodeDate: details.next_episode_to_air?.air_date || null,
   }
+}
+
+export async function resolveTitleId(mediaType, externalId) {
+  if (!['movie', 'tv'].includes(mediaType)) throw new Error('不支持的影视类型')
+  if (/^\d+$/.test(String(externalId))) return { mediaType, id: Number(externalId) }
+  if (!/^tt\d+$/.test(String(externalId))) throw new Error('无法识别的影视 ID')
+  const response = await tmdb(`/find/${externalId}`, { external_source: 'imdb_id', language: 'zh-CN' }, 30 * 24 * 60 * 60 * 1000)
+  const match = mediaType === 'tv' ? response.tv_results?.[0] : response.movie_results?.[0]
+  if (!match?.id) throw new Error('未找到对应的 TMDB 影视条目')
+  return { mediaType, id: match.id }
 }
 
 export async function getPersonDetails(id) {

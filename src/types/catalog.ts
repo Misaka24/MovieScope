@@ -87,11 +87,18 @@ export interface TitleDetails extends CatalogMedia {
   credits: { cast: CreditPerson[]; crew: CreditPerson[] }
   videos: Array<{ id: string; name: string; type: string; official: boolean; url: string; key: string; site: string }>
   images: MediaImage[]
+  posters: MediaImage[]
+  logos: MediaImage[]
   recommendations: CatalogMedia[]
   similar: CatalogMedia[]
   reviews: Review[]
   keywords: Array<{ id: number; name: string }>
   watchProviders: { link: string; flatrate: Array<{ provider_id: number; provider_name: string; logo_path: string }>; rent: unknown[]; buy: unknown[] } | null
+  createdBy: Array<{ id: number; name: string }>
+  numberOfSeasons: number | null
+  numberOfEpisodes: number | null
+  lastAirDate: string | null
+  nextEpisodeDate: string | null
 }
 
 export interface PersonDetails {

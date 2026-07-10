@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { loadEnv } from './env.mjs'
 import { getDatabase } from './database.mjs'
 import { getHomeData } from './home-service.mjs'
-import { discoverCatalog, getBrowsePage, getCatalogOptions, getIndustryNews, getPersonDetails, getPopularPeople, getTitleDetails, getWatchProviders, searchCatalog } from './catalog-service.mjs'
+import { discoverCatalog, getBrowsePage, getCatalogOptions, getIndustryNews, getPersonDetails, getPopularPeople, getTitleDetails, getWatchProviders, resolveTitleId, searchCatalog } from './catalog-service.mjs'
 
 loadEnv()
 
@@ -98,9 +98,10 @@ const server = createServer(async (request, response) => {
       return
     }
 
-    const titleMatch = url.pathname.match(/^\/api\/v1\/titles\/(movie|tv)\/(\d+)$/)
+    const titleMatch = url.pathname.match(/^\/api\/v1\/titles\/(movie|tv)\/([a-zA-Z0-9]+)$/)
     if (request.method === 'GET' && titleMatch) {
-      const data = await getTitleDetails(titleMatch[1], titleMatch[2])
+      const resolved = await resolveTitleId(titleMatch[1], titleMatch[2])
+      const data = await getTitleDetails(resolved.mediaType, resolved.id)
       sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
       return
     }
