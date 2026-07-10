@@ -15,8 +15,6 @@ test('管理员权限按分组继承并应用用户级允许与拒绝覆盖',asy
  const access=await getAdminAccess(1)
  assert.deepEqual(access.permissions,['analytics.view','dashboard.view'])
 })
-
 test('非管理员不能通过后台权限校验',async()=>{
  await assert.rejects(()=>requireAdminPermission({id:2,role:'user'},'dashboard.view'),error=>error.status===403)
 })
-
