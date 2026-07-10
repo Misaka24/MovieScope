@@ -33,7 +33,7 @@ function primaryRating(movie: HeroMovie) {
               <span>{{ activeMovie.year || '年份暂无' }}</span><span>{{ primaryRating(activeMovie) }}</span>
             </div>
             <p class="mt-4 max-w-[620px] text-[15px] leading-[25px] text-on-surface-variant md:text-base">{{ activeMovie.overview }}</p>
-            <div class="mt-6 flex flex-wrap gap-2.5"><button class="flex h-10 items-center gap-1.5 rounded bg-primary-container px-4.5 text-[15px] font-extrabold text-on-primary-container" type="button"><span class="material-symbols-outlined text-xl">info</span>查看详情</button><a class="flex h-10 items-center gap-1.5 rounded border border-white/20 bg-black/30 px-4.5 text-[15px] font-bold text-white backdrop-blur-md" href="#正在上映"><span class="material-symbols-outlined text-xl">explore</span>开始探索</a></div>
+            <div class="mt-6 flex flex-wrap gap-2.5"><button class="inline-flex h-10 min-w-[126px] flex-none items-center justify-center gap-1.5 whitespace-nowrap rounded bg-primary-container px-4 text-[15px] font-extrabold text-on-primary-container" type="button"><span class="material-symbols-outlined flex-none text-xl">info</span><span class="flex-none">查看详情</span></button><a class="inline-flex h-10 min-w-[132px] flex-none items-center justify-center gap-1.5 whitespace-nowrap rounded border border-white/20 bg-black/30 px-4 text-[15px] font-bold text-white backdrop-blur-md" href="#正在上映"><span class="material-symbols-outlined flex-none text-xl">explore</span><span class="flex-none">开始探索</span></a></div>
           </div>
         </Transition>
       </div>

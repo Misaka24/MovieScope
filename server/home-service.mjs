@@ -159,7 +159,7 @@ function toNews(edge) {
     category: node.source?.homepage?.label || 'IMDb 新闻',
     title: fixMojibake(node.articleTitle?.plainText) || '影视行业动态',
     summary: fixMojibake(node.text?.plainText).replace(/\s+/g, ' ').slice(0, 180),
-    image: node.image?.url || backdropFallback,
+    image: node.image?.url || null,
     publishedAt: node.date || null,
     url: node.externalUrl || null,
   }
@@ -198,7 +198,7 @@ export async function getHomeData() {
       ...toTmdbMedia(item, 'movie', genres.movie),
       ratingDisplay: { imdb: 'tmdb-fallback' },
     }))
-  const news = (source('imdb-news')?.data?.news?.edges || []).slice(0, 3).map(toNews)
+  const news = (source('imdb-news')?.data?.news?.edges || []).map(toNews)
 
   return {
     generatedAt: new Date().toISOString(),

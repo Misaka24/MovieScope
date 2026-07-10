@@ -32,7 +32,7 @@ export interface IndustryNews {
   category: string
   title: string
   summary: string
-  image: string
+  image: string | null
   publishedAt: string | null
   url: string | null
 }
