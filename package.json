@@ -12,7 +12,8 @@
     "api": "node server/server.mjs",
     "dev:all": "node scripts/dev.mjs",
     "cache:inspect": "node scripts/inspect-cache.mjs",
-    "cache:export": "node scripts/export-cache.mjs"
+    "cache:export": "node scripts/export-cache.mjs",
+    "admin:promote": "node scripts/promote-admin.mjs"
   },
   "dependencies": {
     "mysql2": "^3.14.5",

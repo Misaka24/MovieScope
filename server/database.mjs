@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 let databasePromise
@@ -27,8 +27,12 @@ async function createDatabase() {
     multipleStatements: true,
   }
   const pool = mysql.createPool(poolOptions)
-  const migration = await readFile(resolve('db/migrations/001_api_cache.mysql.sql'), 'utf8')
-  await pool.query(migration)
+  const migrationDir = resolve('db/migrations')
+  const migrationFiles = (await readdir(migrationDir)).filter((name) => name.endsWith('.mysql.sql')).sort()
+  for (const filename of migrationFiles) {
+    const migration = await readFile(resolve(migrationDir, filename), 'utf8')
+    await pool.query(migration)
+  }
   return {
     query: async (text, values = []) => {
       const [rows] = await pool.query(text, values)
