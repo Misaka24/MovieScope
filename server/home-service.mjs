@@ -22,6 +22,20 @@ function genreNames(ids, map) {
   return (ids || []).map((id) => map.get(id)).filter(Boolean).slice(0, 2)
 }
 
+export function hasChineseTitle(value) {
+  return /\p{Script=Han}/u.test(value || '')
+}
+
+export function pickChineseTranslation(translations, mediaType) {
+  const field = mediaType === 'tv' ? 'name' : 'title'
+  const regionPriority = new Map([['CN', 0], ['SG', 1], ['TW', 2], ['HK', 3]])
+  return (translations || [])
+    .filter((item) => item.iso_639_1 === 'zh' && hasChineseTitle(item.data?.[field]))
+    .sort((left, right) => (regionPriority.get(left.iso_3166_1) ?? 9) - (regionPriority.get(right.iso_3166_1) ?? 9))
+    .map((item) => item.data[field].trim())
+    .find(Boolean) || null
+}
+
 function sample(items, size) {
   const shuffled = [...items]
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
@@ -87,6 +101,45 @@ function chunks(items, size) {
   const result = []
   for (let index = 0; index < items.length; index += size) result.push(items.slice(index, index + size))
   return result
+}
+
+async function localizeTmdbTitle(media) {
+  if (hasChineseTitle(media.title)) return media
+  try {
+    const response = await tmdb(`/${media.mediaType}/${media.sourceId}/translations`, {}, 30 * 24 * 60 * 60 * 1000)
+    const title = pickChineseTranslation(response.translations, media.mediaType)
+    return title ? { ...media, title } : media
+  } catch {
+    return media
+  }
+}
+
+async function localizeTmdbGroups(groups) {
+  const unique = new Map()
+  for (const items of groups) {
+    for (const item of items) unique.set(`${item.mediaType}:${item.sourceId}`, item)
+  }
+  const localized = await Promise.all([...unique.values()].map(localizeTmdbTitle))
+  const lookup = new Map(localized.map((item) => [`${item.mediaType}:${item.sourceId}`, item]))
+  return groups.map((items) => items.map((item) => lookup.get(`${item.mediaType}:${item.sourceId}`) || item))
+}
+
+async function localizeImdbTitles(items) {
+  return Promise.all(items.map(async (media) => {
+    if (!String(media.sourceId).startsWith('tt')) return media
+    try {
+      const response = await tmdb(`/find/${media.sourceId}`, {
+        external_source: 'imdb_id',
+        language: 'zh-CN',
+      }, 30 * 24 * 60 * 60 * 1000)
+      const match = media.mediaType === 'tv' ? response.tv_results?.[0] : response.movie_results?.[0]
+      const title = match?.title || match?.name
+      if (!hasChineseTitle(title)) return media
+      return { ...media, title: title.trim(), sources: [...new Set([...media.sources, 'tmdb'])] }
+    } catch {
+      return media
+    }
+  }))
 }
 
 async function loadImdbTitleBatch(titleIds) {
@@ -189,27 +242,38 @@ export async function getHomeData() {
   ])
 
   const source = (name) => sources.find((item) => item.name === name)
-  const imdbTop = (source('imdb-top-250')?.data?.titleChartRankings?.edges || []).map(toImdbMedia)
+  const imdbTopBase = (source('imdb-top-250')?.data?.titleChartRankings?.edges || []).map(toImdbMedia)
   const nowPlayingRaw = (source('tmdb-now-playing')?.data?.results || []).slice(0, 6)
   const popularMoviesRaw = (source('tmdb-popular-movies')?.data?.results || []).slice(0, 6)
   const popularTvRaw = (source('tmdb-popular-tv')?.data?.results || []).slice(0, 6)
-  const nowPlayingBase = nowPlayingRaw.map((item) => toTmdbMedia(item, 'movie', genres.movie))
-  const popularMoviesBase = popularMoviesRaw.map((item) => toTmdbMedia(item, 'movie', genres.movie))
-  const popularTvBase = popularTvRaw.map((item) => toTmdbMedia(item, 'tv', genres.tv))
-  const trendingCandidates = (source('tmdb-trending')?.data?.results || [])
+  const nowPlayingUnlocalized = nowPlayingRaw.map((item) => toTmdbMedia(item, 'movie', genres.movie))
+  const popularMoviesUnlocalized = popularMoviesRaw.map((item) => toTmdbMedia(item, 'movie', genres.movie))
+  const popularTvUnlocalized = popularTvRaw.map((item) => toTmdbMedia(item, 'tv', genres.tv))
+  const trendingUnlocalized = (source('tmdb-trending')?.data?.results || [])
     .map((item) => toTmdbMedia(item, 'movie', genres.movie))
     .filter((item) => item.backdrop && item.title)
-  const [nowPlaying, popularMovies, popularTvTmdb, enrichedTrending] = await enrichUniqueImdbRatings(
-    [nowPlayingBase, popularMoviesBase, popularTvBase, trendingCandidates],
-  )
-  const popularTv = popularTvTmdb
-  const hero = selectImdbHeroMovies([enrichedTrending, nowPlaying, popularMovies])
-  const tmdbTopRated = (source('tmdb-top-rated')?.data?.results || [])
+  const tmdbTopRatedUnlocalized = (source('tmdb-top-rated')?.data?.results || [])
     .slice(0, 6)
     .map((item) => ({
       ...toTmdbMedia(item, 'movie', genres.movie),
       ratingDisplay: { imdb: 'tmdb-fallback' },
     }))
+  const [imdbTop, localizedGroups] = await Promise.all([
+    localizeImdbTitles(imdbTopBase.slice(0, 6)),
+    localizeTmdbGroups([
+      nowPlayingUnlocalized,
+      popularMoviesUnlocalized,
+      popularTvUnlocalized,
+      trendingUnlocalized,
+      tmdbTopRatedUnlocalized,
+    ]),
+  ])
+  const [nowPlayingBase, popularMoviesBase, popularTvBase, trendingCandidates, tmdbTopRated] = localizedGroups
+  const [nowPlaying, popularMovies, popularTvTmdb, enrichedTrending] = await enrichUniqueImdbRatings(
+    [nowPlayingBase, popularMoviesBase, popularTvBase, trendingCandidates],
+  )
+  const popularTv = popularTvTmdb
+  const hero = selectImdbHeroMovies([enrichedTrending, nowPlaying, popularMovies])
   const news = (source('imdb-news')?.data?.news?.edges || []).map(toNews)
 
   return {
