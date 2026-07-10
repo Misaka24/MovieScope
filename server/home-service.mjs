@@ -31,6 +31,17 @@ function sample(items, size) {
   return shuffled.slice(0, size)
 }
 
+export function selectImdbHeroMovies(groups, size = 5) {
+  const candidates = new Map()
+  for (const items of groups) {
+    for (const item of items) {
+      if (!item.backdrop || item.ratings.imdb == null || item.ratingDisplay.imdb !== 'official') continue
+      candidates.set(`${item.mediaType}:${item.sourceId}`, item)
+    }
+  }
+  return sample([...candidates.values()], size)
+}
+
 function tmdbImage(path, size, fallback) {
   return path ? `https://image.tmdb.org/t/p/${size}${path}` : fallback
 }
@@ -185,13 +196,14 @@ export async function getHomeData() {
   const nowPlayingBase = nowPlayingRaw.map((item) => toTmdbMedia(item, 'movie', genres.movie))
   const popularMoviesBase = popularMoviesRaw.map((item) => toTmdbMedia(item, 'movie', genres.movie))
   const popularTvBase = popularTvRaw.map((item) => toTmdbMedia(item, 'tv', genres.tv))
-  const trending = sample(source('tmdb-trending')?.data?.results || [], 5)
+  const trendingCandidates = (source('tmdb-trending')?.data?.results || [])
     .map((item) => toTmdbMedia(item, 'movie', genres.movie))
     .filter((item) => item.backdrop && item.title)
-  const [nowPlaying, popularMovies, popularTvTmdb, hero] = await enrichUniqueImdbRatings(
-    [nowPlayingBase, popularMoviesBase, popularTvBase, trending],
+  const [nowPlaying, popularMovies, popularTvTmdb, enrichedTrending] = await enrichUniqueImdbRatings(
+    [nowPlayingBase, popularMoviesBase, popularTvBase, trendingCandidates],
   )
   const popularTv = popularTvTmdb
+  const hero = selectImdbHeroMovies([enrichedTrending, nowPlaying, popularMovies])
   const tmdbTopRated = (source('tmdb-top-rated')?.data?.results || [])
     .slice(0, 6)
     .map((item) => ({

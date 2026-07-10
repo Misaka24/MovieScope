@@ -2,16 +2,12 @@
 import { computed } from 'vue'
 import { useHeroCarousel } from '../../composables/useHeroCarousel'
 import type { HeroMovie } from '../../types/media'
+import { primaryRatingLabel } from '../../utils/ratings'
 
 const props = defineProps<{ items: HeroMovie[]; loading: boolean }>()
 const { movies, activeIndex, activeMovie, imageLoading, select, markLoaded } = useHeroCarousel(() => props.items)
 const ready = computed(() => Boolean(activeMovie.value))
 
-function primaryRating(movie: HeroMovie) {
-  if (movie.ratings.imdb != null) return `IMDb ${movie.ratings.imdb.toFixed(1)}`
-  if (movie.ratings.tmdb != null) return `TMDB ${movie.ratings.tmdb.toFixed(1)}`
-  return '评分未收录'
-}
 </script>
 
 <template>
@@ -30,7 +26,7 @@ function primaryRating(movie: HeroMovie) {
             <div class="mb-3.5 flex flex-wrap gap-1.5"><span v-for="genre in activeMovie.genres.slice(0, 2)" :key="genre" class="rounded border border-primary/35 bg-black/40 px-2.5 py-0.5 font-label-caps text-[10px] font-bold text-primary backdrop-blur-md">{{ genre }}</span></div>
             <h1 class="text-3xl font-extrabold leading-tight text-white md:text-5xl lg:text-6xl">{{ activeMovie.title }}</h1>
             <div class="mt-4 flex flex-wrap items-center gap-3.5 text-[13px] font-semibold text-on-surface-variant">
-              <span>{{ activeMovie.year || '年份暂无' }}</span><span>{{ primaryRating(activeMovie) }}</span>
+              <span>{{ activeMovie.year || '年份暂无' }}</span><span>{{ primaryRatingLabel(activeMovie, false) }}</span>
             </div>
             <p class="mt-4 max-w-[620px] text-[15px] leading-[25px] text-on-surface-variant md:text-base">{{ activeMovie.overview }}</p>
             <div class="mt-6 flex flex-wrap gap-2.5"><button class="inline-flex h-10 min-w-[126px] flex-none items-center justify-center gap-1.5 whitespace-nowrap rounded bg-primary-container px-4 text-[15px] font-extrabold text-on-primary-container" type="button"><span class="material-symbols-outlined flex-none text-xl">info</span><span class="flex-none">查看详情</span></button><a class="inline-flex h-10 min-w-[132px] flex-none items-center justify-center gap-1.5 whitespace-nowrap rounded border border-white/20 bg-black/30 px-4 text-[15px] font-bold text-white backdrop-blur-md" href="#正在上映"><span class="material-symbols-outlined flex-none text-xl">explore</span><span class="flex-none">开始探索</span></a></div>
