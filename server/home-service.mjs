@@ -1,4 +1,4 @@
-import { justOne, tmdb } from './providers.mjs'
+import { imdbApiDev, justOne, tmdb } from './providers.mjs'
 
 const imageFallback = 'https://placehold.co/600x900/1e2024/e2e2e8?text=MovieScope'
 const backdropFallback = 'https://placehold.co/1600x900/111317/e2e2e8?text=MovieScope'
@@ -130,43 +130,63 @@ function mergeRatings(primary, candidates, alternateTitles = []) {
   }
 }
 
-async function enrichImdbRating(media) {
+function chunks(items, size) {
+  const result = []
+  for (let index = 0; index < items.length; index += size) result.push(items.slice(index, index + size))
+  return result
+}
+
+async function loadImdbTitleBatch(titleIds) {
+  if (!titleIds.length) return []
   try {
-    const external = await tmdb(`/${media.mediaType}/${media.sourceId}/external_ids`, {}, 7 * 24 * 60 * 60 * 1000)
-    if (!external.imdb_id) return { ...media, ratingDisplay: { ...media.ratingDisplay, imdb: 'tmdb-fallback' } }
-    const data = await justOne(
-      '/api/imdb/title-user-reviews-summary-query/v1',
-      { id: external.imdb_id, languageCountry: 'en_US' },
-      24 * 60 * 60 * 1000,
-    )
-    const imdbRating = Number(data.title?.ratingsSummary?.aggregateRating || 0) || null
+    const response = await imdbApiDev('/titles:batchGet', { titleIds }, 24 * 60 * 60 * 1000)
+    return response.titles || []
+  } catch {
+    if (titleIds.length === 1) return []
+    const middle = Math.ceil(titleIds.length / 2)
+    const results = await Promise.all([
+      loadImdbTitleBatch(titleIds.slice(0, middle)),
+      loadImdbTitleBatch(titleIds.slice(middle)),
+    ])
+    return results.flat()
+  }
+}
+
+async function enrichImdbRatings(items) {
+  const resolved = await Promise.all(items.map(async (media) => {
+    try {
+      const external = await tmdb(`/${media.mediaType}/${media.sourceId}/external_ids`, {}, 7 * 24 * 60 * 60 * 1000)
+      return { media, imdbId: external.imdb_id || null }
+    } catch {
+      return { media, imdbId: null }
+    }
+  }))
+  const imdbIds = [...new Set(resolved.map((item) => item.imdbId).filter(Boolean))]
+  const responses = await Promise.all(chunks(imdbIds, 5).map(loadImdbTitleBatch))
+  const titleById = new Map(
+    responses
+      .flat()
+      .map((title) => [title.id, title]),
+  )
+  return resolved.map(({ media, imdbId }) => {
+    const title = imdbId ? titleById.get(imdbId) : null
+    const imdbRating = Number(title?.rating?.aggregateRating || 0) || null
+    if (!imdbRating) return { ...media, ratingDisplay: { ...media.ratingDisplay, imdb: 'tmdb-fallback' } }
     return {
       ...media,
       ratings: { ...media.ratings, imdb: imdbRating },
-      ratingDisplay: { ...media.ratingDisplay, imdb: imdbRating ? 'official' : 'unavailable' },
-      sources: imdbRating ? [...new Set([...media.sources, 'imdb'])] : media.sources,
+      ratingDisplay: { ...media.ratingDisplay, imdb: 'official' },
+      sources: [...new Set([...media.sources, 'imdb'])],
     }
-  } catch {
-    return { ...media, ratingDisplay: { ...media.ratingDisplay, imdb: 'tmdb-fallback' } }
-  }
+  })
 }
 
-async function enrichImdbRatings(items, enabled = true) {
-  if (!enabled) {
-    return items.map((item) => ({
-      ...item,
-      ratingDisplay: { ...item.ratingDisplay, imdb: 'tmdb-fallback' },
-    }))
-  }
-  return Promise.all(items.map(enrichImdbRating))
-}
-
-async function enrichUniqueImdbRatings(groups, enabled) {
+async function enrichUniqueImdbRatings(groups) {
   const unique = new Map()
   for (const items of groups) {
     for (const item of items) unique.set(`${item.mediaType}:${item.sourceId}`, item)
   }
-  const enriched = await enrichImdbRatings([...unique.values()], enabled)
+  const enriched = await enrichImdbRatings([...unique.values()])
   const lookup = new Map(enriched.map((item) => [`${item.mediaType}:${item.sourceId}`, item]))
   return groups.map((items) => items.map((item) => lookup.get(`${item.mediaType}:${item.sourceId}`) || item))
 }
@@ -231,16 +251,14 @@ export async function getHomeData() {
     safeSource('tmdb-trending', () => tmdb('/trending/movie/week', { language: 'zh-CN' })),
     safeSource('douban-hot-movies', () => loadDoubanHot('movie')),
     safeSource('douban-hot-tv', () => loadDoubanHot('tv')),
-    safeSource('imdb-top-250', () => justOne('/api/imdb/title-chart-rankings/v1', { rankingsChartType: 'TOP_250', languageCountry: 'en_US' }, 60 * 60 * 1000)),
-    safeSource('imdb-news', () => justOne('/api/imdb/news-by-category-query/v1', { category: 'MOVIE', languageCountry: 'en_US' }, 30 * 60 * 1000)),
+    safeSource('imdb-top-250', () => justOne('/api/imdb/title-chart-rankings/v1', { rankingsChartType: 'TOP_250', languageCountry: 'en_US' }, 7 * 24 * 60 * 60 * 1000)),
+    safeSource('imdb-news', () => justOne('/api/imdb/news-by-category-query/v1', { category: 'MOVIE', languageCountry: 'en_US' }, 24 * 60 * 60 * 1000)),
   ])
 
   const source = (name) => sources.find((item) => item.name === name)
   const doubanMovies = (source('douban-hot-movies')?.data || []).map(toDoubanMedia)
   const doubanTv = (source('douban-hot-tv')?.data || []).map(toDoubanMedia)
   const imdbTop = (source('imdb-top-250')?.data?.titleChartRankings?.edges || []).map(toImdbMedia)
-  const justOneBalanceAvailable = !sources.some((item) => item.error?.includes('INSUFFICIENT BALANCE'))
-  const imdbAvailable = source('imdb-top-250')?.status === 'ok' && justOneBalanceAvailable
   const nowPlayingRaw = (source('tmdb-now-playing')?.data?.results || []).slice(0, 6)
   const popularMoviesRaw = (source('tmdb-popular-movies')?.data?.results || []).slice(0, 6)
   const popularTvRaw = (source('tmdb-popular-tv')?.data?.results || []).slice(0, 6)
@@ -252,7 +270,6 @@ export async function getHomeData() {
     .filter((item) => item.backdrop && item.title)
   const [nowPlaying, popularMovies, popularTvTmdb, hero] = await enrichUniqueImdbRatings(
     [nowPlayingBase, popularMoviesBase, popularTvBase, trending],
-    imdbAvailable,
   )
   const popularTv = popularTvTmdb.length ? popularTvTmdb : doubanTv.slice(0, 6)
   const tmdbTopRated = (source('tmdb-top-rated')?.data?.results || [])
