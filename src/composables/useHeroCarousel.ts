@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import type { HeroMovie } from '../types/media'
 
 function shuffle<T>(items: readonly T[]) {
@@ -10,25 +10,36 @@ function shuffle<T>(items: readonly T[]) {
   return copy
 }
 
-export function useHeroCarousel(pool: readonly HeroMovie[]) {
-  const movies = shallowRef<HeroMovie[]>(shuffle(pool).slice(0, 5))
+export function useHeroCarousel(input: () => readonly HeroMovie[]) {
+  const movies = shallowRef<HeroMovie[]>([])
   const activeIndex = shallowRef(0)
-  const loading = shallowRef(true)
+  const imageLoading = shallowRef(true)
   let timer: ReturnType<typeof setInterval> | undefined
 
   const activeMovie = computed(() => movies.value[activeIndex.value])
+
+  watch(input, (items) => {
+    movies.value = shuffle(items).slice(0, 5)
+    activeIndex.value = 0
+    imageLoading.value = true
+  }, { immediate: true })
 
   function select(index: number) {
     activeIndex.value = index
   }
 
   function next() {
+    if (!movies.value.length) return
     activeIndex.value = (activeIndex.value + 1) % movies.value.length
   }
 
   function markLoaded() {
-    loading.value = false
+    imageLoading.value = false
   }
+
+  watch(activeIndex, () => {
+    imageLoading.value = true
+  })
 
   onMounted(() => {
     timer = setInterval(next, 7000)
@@ -38,5 +49,5 @@ export function useHeroCarousel(pool: readonly HeroMovie[]) {
     if (timer) clearInterval(timer)
   })
 
-  return { movies, activeIndex, activeMovie, loading, select, markLoaded }
+  return { movies, activeIndex, activeMovie, imageLoading, select, markLoaded }
 }
