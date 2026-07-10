@@ -79,6 +79,18 @@ async function imdbDetails(imdbId) {
   }
 }
 
+async function loadImdbBatch(titleIds) {
+  if (!titleIds.length) return []
+  try {
+    const response = await imdbApiDev('/titles:batchGet', { titleIds }, 24 * 60 * 60 * 1000)
+    return response.titles || []
+  } catch {
+    if (titleIds.length === 1) return []
+    const middle = Math.ceil(titleIds.length / 2)
+    return (await Promise.all([loadImdbBatch(titleIds.slice(0, middle)), loadImdbBatch(titleIds.slice(middle))])).flat()
+  }
+}
+
 async function imdbRatingsFor(items) {
   const resolved = await Promise.all(items.map(async (item) => {
     if (item.mediaType === 'person') return { item, imdbId: null }
@@ -89,16 +101,20 @@ async function imdbRatingsFor(items) {
       return { item, imdbId: null }
     }
   }))
-  return Promise.all(resolved.map(async ({ item, imdbId }) => {
-    if (!imdbId) return { ...item, imdbId: null, imdbRating: null, imdbVoteCount: null }
-    const imdb = await imdbDetails(imdbId)
-    return {
-      ...item,
-      imdbId,
-      imdbRating: number(imdb?.rating?.aggregateRating),
-      imdbVoteCount: number(imdb?.rating?.voteCount),
-    }
-  }))
+  const ids = [...new Set(resolved.map(({ imdbId }) => imdbId).filter(Boolean))]
+  const batches = []
+  for (let index = 0; index < ids.length; index += 5) batches.push(ids.slice(index, index + 5))
+  const titles = (await Promise.all(batches.map(loadImdbBatch))).flat()
+  const byId = new Map(titles.map((title) => [title.id, title]))
+  const missingIds = ids.filter((imdbId) => !byId.has(imdbId))
+  const fallback = await Promise.allSettled(missingIds.map((imdbId) => imdbDetails(imdbId)))
+  fallback.forEach((result, index) => {
+    if (result.status === 'fulfilled' && result.value) byId.set(missingIds[index], result.value)
+  })
+  return resolved.map(({ item, imdbId }) => {
+    const imdb = imdbId ? byId.get(imdbId) : null
+    return { ...item, imdbId, imdbRating: number(imdb?.rating?.aggregateRating), imdbVoteCount: number(imdb?.rating?.voteCount) }
+  })
 }
 
 function pagination(response, results) {
@@ -123,7 +139,7 @@ export async function searchCatalog(params) {
       ? { id: Number(item.id), mediaType: 'keyword', name: item.name || '未命名关键词' }
       : mediaTypeOf(item) === 'person' ? personSummary(item) : mediaSummary(item, genres[mediaTypeOf(item)] || [], type === 'tv' ? 'tv' : 'movie'))
   const media = mapped.filter((item) => item.mediaType === 'movie' || item.mediaType === 'tv')
-  const enriched = await imdbRatingsFor(media.slice(0, 10))
+  const enriched = await imdbRatingsFor(media)
   const ratingByKey = new Map(enriched.map((item) => [`${item.mediaType}:${item.id}`, item]))
   return { query, type, genres, ...pagination(response, mapped.map((item) => ratingByKey.get(`${item.mediaType}:${item.id}`) || item)) }
 }
@@ -144,7 +160,7 @@ export async function discoverCatalog(params) {
     'vote_count.gte': minRating ? 100 : undefined,
     with_original_language: params.language || undefined,
     with_watch_providers: params.provider || undefined,
-    watch_region: params.provider ? 'CN' : undefined,
+    watch_region: params.provider ? (params.watchRegion || 'CN') : undefined,
   }
   if (yearValue) apiParams[mediaType === 'movie' ? 'primary_release_year' : 'first_air_date_year'] = yearValue
   const [response, genres] = await Promise.all([
@@ -152,8 +168,8 @@ export async function discoverCatalog(params) {
     loadGenres(),
   ])
   const mapped = (response.results || []).map((item) => mediaSummary(item, genres[mediaType], mediaType))
-  const results = await imdbRatingsFor(mapped.slice(0, 12))
-  return { mediaType, sortBy, filters: { genres: params.genres || '', year: yearValue, minRating, language: params.language || '', provider: params.provider || '' }, genres, ...pagination(response, results) }
+  const results = await imdbRatingsFor(mapped)
+  return { mediaType, sortBy, filters: { genres: params.genres || '', year: yearValue, minRating, language: params.language || '', provider: params.provider || '', watchRegion: params.watchRegion || '' }, genres, ...pagination(response, results) }
 }
 
 function videoUrl(video) {
@@ -167,6 +183,30 @@ function creditsData(credits) {
     cast: (credits?.cast || []).slice(0, 18).map((person) => ({ id: person.id, name: person.name, character: person.character || null, profile: image(person.profile_path, 'w342', profileFallback) })),
     crew: (credits?.crew || []).filter((person) => ['Director', 'Writer', 'Screenplay', 'Creator'].includes(person.job)).slice(0, 12).map((person) => ({ id: person.id, name: person.name, job: person.job, department: person.department, profile: image(person.profile_path, 'w342', profileFallback) })),
   }
+}
+
+function providerOfficialUrl(name, fallback) {
+  const value = String(name || '').toLowerCase()
+  const links = [
+    [['netflix'], 'https://www.netflix.com/'],
+    [['disney'], 'https://www.disneyplus.com/'],
+    [['amazon prime', 'prime video'], 'https://www.primevideo.com/'],
+    [['apple tv'], 'https://tv.apple.com/'],
+    [['max', 'hbo'], 'https://www.max.com/'],
+    [['hulu'], 'https://www.hulu.com/'],
+    [['iqiyi', '爱奇艺'], 'https://www.iq.com/'],
+    [['tencent', '腾讯视频', 'wetv'], 'https://wetv.vip/'],
+    [['youku', '优酷'], 'https://www.youku.tv/'],
+    [['bilibili', '哔哩哔哩'], 'https://www.bilibili.com/'],
+    [['mubi'], 'https://mubi.com/'],
+    [['paramount'], 'https://www.paramountplus.com/'],
+    [['peacock'], 'https://www.peacocktv.com/'],
+  ]
+  return links.find(([aliases]) => aliases.some((alias) => value.includes(alias)))?.[1] || fallback || null
+}
+
+function providerItems(items, fallback) {
+  return (items || []).map((provider) => ({ ...provider, officialUrl: providerOfficialUrl(provider.provider_name, fallback) }))
 }
 
 function uniqueImages(items, size, fallback) {
@@ -193,7 +233,9 @@ export async function getTitleDetails(mediaType, id) {
     : cnRelease?.rating || null
   const credits = creditsData(details.credits)
   const runtime = mediaType === 'movie' ? details.runtime : details.episode_run_time?.[0]
-  const providers = details['watch/providers']?.results?.CN || null
+  const providers = details['watch/providers']?.results?.CN || details['watch/providers']?.results?.HK || details['watch/providers']?.results?.TW || null
+  const recommendations = await imdbRatingsFor((details.recommendations?.results || []).slice(0, 12).map((item) => mediaSummary(item, [], mediaType)))
+  const similar = await imdbRatingsFor((details.similar?.results || []).slice(0, 12).map((item) => mediaSummary(item, [], mediaType)))
   return {
     ...mediaSummary(details, [], mediaType),
     tagline: details.tagline || null,
@@ -218,11 +260,11 @@ export async function getTitleDetails(mediaType, id) {
     images: uniqueImages(details.images?.backdrops, 'w1280', backdropFallback).slice(0, 24),
     posters: uniqueImages(details.images?.posters, 'w500', imageFallback).slice(0, 12),
     logos: uniqueImages(details.images?.logos, 'w500', imageFallback).slice(0, 8),
-    recommendations: (details.recommendations?.results || []).slice(0, 12).map((item) => mediaSummary(item, [], mediaType)),
-    similar: (details.similar?.results || []).slice(0, 12).map((item) => mediaSummary(item, [], mediaType)),
+    recommendations,
+    similar,
     reviews: (details.reviews?.results || []).slice(0, 8).map((review) => ({ id: review.id, author: review.author, content: review.content, createdAt: review.created_at, rating: number(review.author_details?.rating) })),
     keywords: (details.keywords?.keywords || details.keywords?.results || []).map((keyword) => ({ id: keyword.id, name: keyword.name })),
-    watchProviders: providers ? { link: providers.link, flatrate: providers.flatrate || [], rent: providers.rent || [], buy: providers.buy || [] } : null,
+    watchProviders: providers ? { link: providers.link, flatrate: providerItems(providers.flatrate, providers.link), rent: providerItems(providers.rent, providers.link), buy: providerItems(providers.buy, providers.link) } : null,
     createdBy: details.created_by?.map((person) => ({ id: person.id, name: person.name })) || [],
     numberOfSeasons: number(details.number_of_seasons),
     numberOfEpisodes: number(details.number_of_episodes),
@@ -276,40 +318,90 @@ export async function getCatalogOptions() {
   }
 }
 
+function imdbChartItem(edge) {
+  const item = edge?.node?.item || edge?.item || edge?.node || {}
+  return { id: item.id, mediaType: item.titleType?.isSeries ? 'tv' : 'movie', title: item.titleText?.text || item.originalTitleText?.text || '未命名作品', originalTitle: item.originalTitleText?.text || null, year: number(item.releaseYear?.year), releaseDate: null, overview: item.plot?.plotText?.plainText || '', poster: item.primaryImage?.url || imageFallback, backdrop: null, genres: (item.genres?.genres || []).map((genre) => genre.text).filter(Boolean), tmdbRating: null, tmdbVoteCount: 0, popularity: 0, adult: false, imdbId: item.id, imdbRating: number(item.ratingsSummary?.aggregateRating), imdbVoteCount: number(item.ratingsSummary?.voteCount) }
+}
+
 const browsePresets = {
   'now-playing': { title: '正在上映', description: '当前院线正在上映的电影。', path: '/movie/now_playing', mediaType: 'movie', params: { region: 'CN' } },
   upcoming: { title: '即将上映', description: '即将在院线与流媒体上线的电影。', path: '/movie/upcoming', mediaType: 'movie', params: { region: 'CN' } },
   'popular-movies': { title: '热门电影', description: '近期最受观众关注的热门电影。', path: '/movie/popular', mediaType: 'movie' },
-  'top-movies': { title: '高分电影', description: '根据 TMDB 用户评分整理的高分电影。', path: '/movie/top_rated', mediaType: 'movie' },
+  'top-movies': { title: '高分电影', description: '汇集长期保持高口碑的电影作品。', path: '/movie/top_rated', mediaType: 'movie' },
   'popular-tv': { title: '热门剧集', description: '近期热度持续上升的电视剧与网络剧。', path: '/tv/popular', mediaType: 'tv' },
-  'top-tv': { title: '高分剧集', description: '根据 TMDB 用户评分整理的高分剧集。', path: '/tv/top_rated', mediaType: 'tv' },
+  'top-tv': { title: '高分剧集', description: '汇集长期保持高口碑的剧集作品。', path: '/tv/top_rated', mediaType: 'tv' },
   'airing-today': { title: '今日播出', description: '今天有新集数播出的剧集。', path: '/tv/airing_today', mediaType: 'tv', params: { timezone: 'Asia/Shanghai' } },
   'trending-day': { title: '今日趋势', description: '过去一天内热度增长最快的影视作品。', path: '/trending/all/day', mediaType: 'multi' },
   'trending-week': { title: '本周趋势', description: '过去一周内最受关注的影视作品。', path: '/trending/all/week', mediaType: 'multi' },
 }
 
 export async function getBrowsePage(preset, pageValue) {
+  if (preset === 'imdb-top-250') {
+    const response = await justOne('/api/imdb/title-chart-rankings/v1', { rankingsChartType: 'TOP_250', languageCountry: 'en_US' }, 7 * 24 * 60 * 60 * 1000)
+    const all = (response.titleChartRankings?.edges || []).map(imdbChartItem)
+    const page = Math.max(1, Math.min(10, number(pageValue, 1)))
+    const size = 25
+    const genres = await loadGenres()
+    const results = await Promise.all(all.slice((page - 1) * size, page * size).map(async (item) => {
+      try {
+        const found = await tmdb(`/find/${item.imdbId}`, { external_source: 'imdb_id', language: 'zh-CN' }, 30 * 24 * 60 * 60 * 1000)
+        const match = item.mediaType === 'tv' ? found.tv_results?.[0] : found.movie_results?.[0]
+        if (!match) return item
+        return { ...item, title: match.title || match.name || item.title, poster: image(match.poster_path, 'w500', item.poster), backdrop: match.backdrop_path ? image(match.backdrop_path, 'w1280', null) : null, genres: genreNames(match.genre_ids, genres[item.mediaType] || []) }
+      } catch { return item }
+    }))
+    return { preset, title: 'IMDb Top 250', description: 'IMDb 用户长期评分形成的经典电影榜单，每 7 天更新一次。', page, totalPages: Math.ceil(all.length / size), totalResults: all.length, results, genres }
+  }
   const config = browsePresets[preset]
   if (!config) throw new Error('不存在的榜单类型')
   const page = Math.max(1, Math.min(500, number(pageValue, 1)))
-  const [response, genres] = await Promise.all([
-    tmdb(config.path, { language: 'zh-CN', page, ...(config.params || {}) }, 15 * 60 * 1000),
+  const requestPages = preset === 'upcoming' ? [page, page + 1, page + 2, page + 3, page + 4] : [page]
+  const [responses, genres] = await Promise.all([
+    Promise.all(requestPages.map((requestPage) => tmdb(config.path, { language: 'zh-CN', page: requestPage, ...(preset === 'upcoming' ? {} : config.params || {}) }, 15 * 60 * 1000))),
     loadGenres(),
   ])
+  const response = responses[0]
+  if (preset === 'upcoming') response.results = responses.flatMap((item) => item.results || []).sort((left, right) => String(left.release_date || '').localeCompare(String(right.release_date || '')))
+  const today = new Date().toISOString().slice(0, 10)
   const mapped = (response.results || [])
     .filter((item) => item.media_type !== 'person')
+    .filter((item) => preset !== 'upcoming' || (item.release_date && item.release_date >= today))
     .map((item) => {
       const mediaType = config.mediaType === 'multi' ? mediaTypeOf(item) : config.mediaType
       return mediaSummary(item, genres[mediaType] || [], mediaType)
     })
-  const results = await imdbRatingsFor(mapped.slice(0, 12))
+  const results = await imdbRatingsFor(mapped.slice(0, 20))
   return { preset, title: config.title, description: config.description, ...pagination(response, results) }
 }
 
-export async function getPopularPeople(pageValue) {
+async function getPopularCreators(page) {
+  const source = await tmdb('/movie/popular', { language: 'zh-CN', page, region: 'CN' }, 30 * 60 * 1000)
+  const movies = (source.results || []).slice(0, 14)
+  const credits = await Promise.allSettled(movies.map((movie) => tmdb(`/movie/${movie.id}/credits`, { language: 'zh-CN' }, 24 * 60 * 60 * 1000)))
+  const people = new Map()
+  credits.forEach((result, index) => {
+    if (result.status !== 'fulfilled') return
+    const movie = mediaSummary(movies[index], [], 'movie')
+    for (const person of result.value.crew || []) {
+      if (!['Director', 'Writer', 'Screenplay', 'Story'].includes(person.job) || !person.id) continue
+      const existing = people.get(person.id) || { id: person.id, mediaType: 'person', name: person.name || '未命名影人', department: person.department || (person.job === 'Director' ? 'Directing' : 'Writing'), profile: image(person.profile_path, 'w342', profileFallback), popularity: number(person.popularity, 0), knownFor: [] }
+      if (!existing.knownFor.some((item) => item.id === movie.id)) existing.knownFor.push(movie)
+      people.set(person.id, existing)
+    }
+  })
+  const results = [...people.values()].sort((left, right) => right.knownFor.length - left.knownFor.length || right.popularity - left.popularity).slice(0, 30)
+  return { page, totalPages: Math.min(number(source.total_pages, 1), 500), totalResults: results.length, results }
+}
+
+export async function getPopularPeople(pageValue, departmentValue = '') {
   const page = Math.max(1, Math.min(500, number(pageValue, 1)))
-  const response = await tmdb('/person/popular', { language: 'zh-CN', page }, 30 * 60 * 1000)
-  return pagination(response, (response.results || []).map(personSummary))
+  if (departmentValue === 'Creators') return getPopularCreators(page)
+  const sourcePages = departmentValue === 'Acting' ? [page * 3 - 2, page * 3 - 1, page * 3] : [page]
+  const settled = await Promise.allSettled(sourcePages.map((sourcePage) => tmdb('/person/popular', { language: 'zh-CN', page: sourcePage }, 30 * 60 * 1000)))
+  const responses = settled.filter((result) => result.status === 'fulfilled').map((result) => result.value)
+  if (!responses.length) throw settled.find((result) => result.status === 'rejected')?.reason || new Error('热门影人数据暂不可用')
+  const people = responses.flatMap((response) => response.results || []).map(personSummary).filter((person) => departmentValue !== 'Acting' || person.department === 'Acting')
+  return { page, totalPages: departmentValue === 'Acting' ? Math.ceil(Math.min(number(responses[0]?.total_pages, 500), 500) / 3) : Math.min(number(responses[0]?.total_pages, 1), 500), totalResults: departmentValue === 'Acting' ? people.length : number(responses[0]?.total_results, people.length), results: people.slice(0, 30) }
 }
 
 export async function getWatchProviders() {
@@ -327,6 +419,8 @@ export async function getWatchProviders() {
       name: item.provider_name,
       logo: image(item.logo_path, 'w185', imageFallback),
       displayPriority: Math.min(existing?.displayPriority ?? 9999, item.display_priorities?.CN ?? item.display_priorities?.HK ?? item.display_priorities?.TW ?? item.display_priority ?? 9999),
+      regions: [...new Set([...(existing?.regions || []), ...item.display_priorities?.CN != null ? ['CN'] : [], ...item.display_priorities?.HK != null ? ['HK'] : [], ...item.display_priorities?.TW != null ? ['TW'] : []])],
+      officialUrl: providerOfficialUrl(item.provider_name),
       media: [...new Set([...(existing?.media || []), ...regionalMovie.some((value) => value.provider_id === item.provider_id) ? ['movie'] : [], ...regionalTv.some((value) => value.provider_id === item.provider_id) ? ['tv'] : []])],
     })
   }
@@ -346,6 +440,7 @@ export async function getIndustryNews() {
       category: node.source?.homepage?.label || 'IMDb 新闻',
       title: cleanNewsText(node.articleTitle?.plainText) || '影视行业动态',
       summary: cleanNewsText(node.text?.plainText).slice(0, 260),
+      image: node.image?.url || null,
       publishedAt: node.date || null,
       url: node.externalUrl || null,
     }

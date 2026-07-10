@@ -63,6 +63,7 @@ const server = createServer(async (request, response) => {
         minRating: params.rating,
         language: params.language,
         provider: params.provider,
+        watchRegion: params.watchRegion,
       })
       sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
       return
@@ -81,7 +82,7 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && url.pathname === '/api/v1/people/popular') {
-      const data = await getPopularPeople(url.searchParams.get('page'))
+      const data = await getPopularPeople(url.searchParams.get('page'), url.searchParams.get('department'))
       sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
       return
     }

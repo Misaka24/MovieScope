@@ -54,13 +54,13 @@ export interface SearchData extends CatalogPage<SearchResult> {
 export interface DiscoverData extends CatalogPage<CatalogMedia> {
   mediaType: MediaType
   sortBy: string
-  filters: { genres: string; year: number | null; minRating: number; language: string; provider: string }
+  filters: { genres: string; year: number | null; minRating: number; language: string; provider: string; watchRegion: string }
 }
 
 export interface BrowseData extends CatalogPage<CatalogMedia> { preset: string; title: string; description: string }
 export type PeoplePageData = Omit<CatalogPage<CatalogPersonSummary>, 'genres'>
-export interface WatchProvider { id: number; name: string; logo: string; displayPriority: number; media: MediaType[] }
-export interface NewsItem { id: string; category: string; title: string; summary: string; publishedAt: string | null; url: string | null }
+export interface WatchProvider { id: number; name: string; logo: string; officialUrl: string | null; regions: string[]; displayPriority: number; media: MediaType[] }
+export interface NewsItem { id: string; category: string; title: string; summary: string; image: string | null; publishedAt: string | null; url: string | null }
 
 export interface CreditPerson { id: number; name: string; profile: string; character?: string | null; job?: string; department?: string }
 export interface MediaImage { path: string; width: number; height: number }
@@ -93,7 +93,7 @@ export interface TitleDetails extends CatalogMedia {
   similar: CatalogMedia[]
   reviews: Review[]
   keywords: Array<{ id: number; name: string }>
-  watchProviders: { link: string; flatrate: Array<{ provider_id: number; provider_name: string; logo_path: string }>; rent: unknown[]; buy: unknown[] } | null
+  watchProviders: { link: string; flatrate: Array<{ provider_id: number; provider_name: string; logo_path: string; officialUrl: string | null }>; rent: Array<{ provider_id: number; provider_name: string; logo_path: string; officialUrl: string | null }>; buy: Array<{ provider_id: number; provider_name: string; logo_path: string; officialUrl: string | null }> } | null
   createdBy: Array<{ id: number; name: string }>
   numberOfSeasons: number | null
   numberOfEpisodes: number | null

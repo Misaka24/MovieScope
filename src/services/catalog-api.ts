@@ -28,6 +28,6 @@ export const fetchDiscover = (params: Record<string, string | number | null | un
 export const fetchTitle = (type: string, id: string | number) => request<TitleDetails>(`/api/v1/titles/${type}/${id}`)
 export const fetchPerson = (id: string | number) => request<PersonDetails>(`/api/v1/people/${id}`)
 export const fetchBrowse = (preset: string, page: number) => request<BrowseData>(`/api/v1/browse?${queryString({ preset, page })}`)
-export const fetchPopularPeople = (page: number) => request<PeoplePageData>(`/api/v1/people/popular?${queryString({ page })}`)
+export const fetchPopularPeople = (page: number, department?: string) => request<PeoplePageData>(`/api/v1/people/popular?${queryString({ page, department })}`)
 export const fetchWatchProviders = () => request<WatchProvider[]>('/api/v1/watch-providers')
 export const fetchNews = () => request<NewsItem[]>('/api/v1/news')
