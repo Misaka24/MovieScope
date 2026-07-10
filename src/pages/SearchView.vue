@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import GlobalHeader from '../components/global/GlobalHeader.vue'
 import GlobalFooter from '../components/global/GlobalFooter.vue'
@@ -9,11 +9,13 @@ import { useAsyncData } from '../composables/useAsyncData'
 import { fetchSearch } from '../services/catalog-api'
 import type { CatalogMedia, SearchResult, SearchType } from '../types/catalog'
 import { formatCount, formatRuntime } from '../utils/format'
+import { useAuth } from '../composables/useAuth'
+import { mediaApi, profileApi } from '../services/user-api'
 
-const route = useRoute(); const router = useRouter()
+const route = useRoute(); const router = useRouter(); const auth=useAuth()
 const draft = reactive({ genres: [] as number[], yearFrom: '', yearTo: '', minRating: 0, list: 'all', sort: 'relevance' })
 const mobileFilters = ref(false)
-const bookmarks = ref<Set<string>>(new Set(JSON.parse(localStorage.getItem('moviescope:bookmarks') || '[]')))
+const bookmarks = ref<Set<string>>(new Set())
 const q = computed(() => typeof route.query.q === 'string' ? route.query.q : '')
 const type = computed(() => (typeof route.query.type === 'string' ? route.query.type : 'multi') as SearchType)
 const page = computed(() => Number(route.query.page || 1))
@@ -36,7 +38,10 @@ function clearFilters() { draft.genres=[];draft.yearFrom='';draft.yearTo='';draf
 function setPage(next: number) { router.push({ query: { ...route.query, page: Math.max(1, Math.min(data.value?.totalPages || 1, next)) } }) }
 function bookmarkKey(item: CatalogMedia) { return item.mediaType + ':' + item.id }
 function isBookmarked(item: CatalogMedia) { return bookmarks.value.has(bookmarkKey(item)) }
-function toggleBookmark(item: CatalogMedia) { const next = new Set(bookmarks.value); const value = bookmarkKey(item); next.has(value) ? next.delete(value) : next.add(value); bookmarks.value = next; localStorage.setItem('moviescope:bookmarks', JSON.stringify([...next])) }
+async function loadBookmarks(){if(!auth.user.value){bookmarks.value=new Set();return}try{const profile=await profileApi.own();bookmarks.value=new Set(profile.entries.filter(entry=>entry.favorite).map(entry=>entry.mediaType+':'+entry.tmdbId))}catch{}}
+async function toggleBookmark(item: CatalogMedia){if(!auth.user.value){router.push({name:'auth',query:{mode:'login',redirect:route.fullPath}});return}const value=bookmarkKey(item),active=bookmarks.value.has(value),existing=await mediaApi.get(item.mediaType,item.id);await mediaApi.save(item.mediaType,item.id,{imdbId:item.imdbId,title:item.title,posterUrl:item.poster,releaseYear:item.year,watchStatus:existing?.watchStatus||null,favorite:!active,rating:existing?.rating||null,reviewText:existing?.reviewText||null,containsSpoiler:existing?.containsSpoiler||false});const next=new Set(bookmarks.value);active?next.delete(value):next.add(value);bookmarks.value=next}
+onMounted(loadBookmarks)
+watch(()=>auth.user.value?.id,loadBookmarks)
 function typeLabel(value: SearchType) { return ({multi:'全部',movie:'电影',tv:'剧集',person:'影人',keyword:'关键词'} as Record<string,string>)[value] || '全部' }
 watch(q, () => clearFilters())
 </script>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuth } from '../../composables/useAuth'
 
 interface SearchType {
   label: string
@@ -16,6 +17,8 @@ const query = shallowRef('')
 const router = useRouter()
 const route = useRoute()
 const notice = shallowRef('')
+const accountOpen = shallowRef(false)
+const auth = useAuth()
 
 const searchTypes: SearchType[] = [
   { label: '全部', icon: 'search', hint: '搜索电影、剧集、影人' },
@@ -38,6 +41,7 @@ const menuGroups = [
 function chooseSearchType(type: SearchType) {
   searchType.value = type
   searchOpen.value = false
+  accountOpen.value = false
 }
 
 function search() {
@@ -75,10 +79,7 @@ function openMenuItem(group: string, item: string) {
   return router.push({ name: 'notice', query: { title: item, message: `${item}需要用户系统、社区数据或后续专题接口支持，当前尚未开放。` } })
 }
 
-function openAccount(title: string) {
-  notice.value = `${title}功能将在用户系统阶段接入。`
-  window.setTimeout(() => { notice.value = '' }, 2400)
-}
+async function signOut() { await auth.logout(); accountOpen.value=false; router.push('/') }
 
 function toggleMenu() {
   menuOpen.value = !menuOpen.value
@@ -88,18 +89,21 @@ function toggleMenu() {
 function toggleSearch() {
   searchOpen.value = !searchOpen.value
   menuOpen.value = false
+  accountOpen.value = false
 }
 
 function closePanels(event: MouseEvent) {
   if (root.value?.contains(event.target as Node)) return
   menuOpen.value = false
   searchOpen.value = false
+  accountOpen.value = false
 }
 
 function closeOnEscape(event: KeyboardEvent) {
   if (event.key !== 'Escape') return
   menuOpen.value = false
   searchOpen.value = false
+  accountOpen.value = false
 }
 
 onMounted(() => {
@@ -159,8 +163,8 @@ onBeforeUnmount(() => {
         <span class="material-symbols-outlined text-xl">explore</span>
         <span class="hidden text-sm font-bold md:inline">探索</span>
       </RouterLink>
-      <button class="header-action hidden md:flex" type="button" @click="openAccount('登录')"><span class="text-sm font-bold">登录</span></button>
-      <button class="hidden h-[34px] rounded bg-primary-container px-3.5 text-sm font-bold text-on-primary-container hover:brightness-105 lg:block" type="button" @click="openAccount('注册')">注册</button>
+      <template v-if="!auth.user.value"><RouterLink class="header-action hidden md:flex" :to="{name:'auth',query:{mode:'login'}}"><span class="text-sm font-bold">登录</span></RouterLink><RouterLink class="hidden h-[34px] items-center rounded bg-primary-container px-3.5 text-sm font-bold text-on-primary-container hover:brightness-105 lg:flex" :to="{name:'auth',query:{mode:'register'}}">注册</RouterLink></template>
+      <div v-else class="relative"><button type="button" class="flex h-[36px] items-center gap-2 rounded px-2 hover:bg-white/5" @click.stop="accountOpen=!accountOpen;menuOpen=false;searchOpen=false"><img :src="auth.user.value.avatarUrl" class="h-7 w-7 rounded-full object-cover"><span class="hidden max-w-24 truncate text-sm font-bold md:block">{{auth.user.value.displayName}}</span><span class="material-symbols-outlined text-base">arrow_drop_down</span></button><Transition name="dropdown"><div v-if="accountOpen" class="absolute right-0 top-11 z-50 w-52 overflow-hidden rounded-lg border border-white/10 bg-[#1d1d1d] py-1.5 shadow-2xl"><RouterLink class="account-item" to="/me" @click="accountOpen=false"><span class="material-symbols-outlined">account_circle</span>个人主页</RouterLink><RouterLink class="account-item" :to="{name:'public-profile',params:{username:auth.user.value.username}}" @click="accountOpen=false"><span class="material-symbols-outlined">public</span>公开主页</RouterLink><RouterLink v-if="auth.user.value.role==='admin'" class="account-item" to="/admin" @click="accountOpen=false"><span class="material-symbols-outlined">admin_panel_settings</span>管理后台</RouterLink><button class="account-item w-full" @click="signOut"><span class="material-symbols-outlined">logout</span>退出登录</button></div></Transition></div>
     </div>
 
     <Transition name="menu">
@@ -185,6 +189,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .header-action { display: flex; height: 34px; flex: none; align-items: center; gap: 5px; border-radius: 4px; padding: 0 9px; color: #e2e2e8; transition: background-color .2s, color .2s; }
 .header-action:hover { background: rgba(255, 255, 255, .08); color: #ffe5a0; }
+.account-item{display:flex;align-items:center;gap:10px;padding:10px 14px;text-align:left;font-size:13px;font-weight:600;color:#e2e2e8}.account-item:hover{background:rgba(255,255,255,.06);color:#f5c518}.account-item .material-symbols-outlined{font-size:19px}
 .dropdown-enter-active, .dropdown-leave-active { transition: opacity .16s ease, transform .16s ease; }
 .dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(-8px); }
 .menu-enter-active, .menu-leave-active { transition: opacity .22s ease, transform .22s ease; }

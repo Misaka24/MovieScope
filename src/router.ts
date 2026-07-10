@@ -9,6 +9,10 @@ import PeopleView from './pages/PeopleView.vue'
 import NoticeView from './pages/NoticeView.vue'
 import ProvidersView from './pages/ProvidersView.vue'
 import NewsView from './pages/NewsView.vue'
+import AuthView from './pages/AuthView.vue'
+import ProfileView from './pages/ProfileView.vue'
+import PublicProfileView from './pages/PublicProfileView.vue'
+import AdminView from './pages/AdminView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -24,5 +28,9 @@ export const router = createRouter({
     { path: '/notice', name: 'notice', component: NoticeView },
     { path: '/providers', name: 'providers', component: ProvidersView },
     { path: '/news', name: 'news', component: NewsView },
+    { path: '/auth', name: 'auth', component: AuthView },
+    { path: '/me', name: 'profile', component: ProfileView },
+    { path: '/users/:username', name: 'public-profile', component: PublicProfileView },
+    { path: '/admin', name: 'admin', component: AdminView },
   ],
 })
