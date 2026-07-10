@@ -48,6 +48,15 @@ const server = createServer(async (request, response) => {
   }
 })
 
+server.on('error', (error) => {
+  if (error?.code === 'EADDRINUSE') {
+    console.error(`MovieScope API 端口 ${port} 已被占用。请复用现有服务或停止占用该端口的程序。`)
+  } else {
+    console.error('MovieScope API 监听失败。', error instanceof Error ? error.message : error)
+  }
+  process.exitCode = 1
+})
+
 try {
   await getDatabase()
   server.listen(port, '127.0.0.1', () => {
