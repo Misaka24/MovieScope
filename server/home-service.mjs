@@ -134,13 +134,13 @@ async function enrichUniqueImdbRatings(groups) {
 }
 
 async function loadGenres() {
-  const [movies, tv] = await Promise.all([
+  const [movies, tv] = await Promise.allSettled([
     tmdb('/genre/movie/list', { language: 'zh-CN' }, 7 * 24 * 60 * 60 * 1000),
     tmdb('/genre/tv/list', { language: 'zh-CN' }, 7 * 24 * 60 * 60 * 1000),
   ])
   return {
-    movie: new Map((movies.genres || []).map((genre) => [genre.id, genre.name])),
-    tv: new Map((tv.genres || []).map((genre) => [genre.id, genre.name])),
+    movie: new Map((movies.status === 'fulfilled' ? movies.value.genres || [] : []).map((genre) => [genre.id, genre.name])),
+    tv: new Map((tv.status === 'fulfilled' ? tv.value.genres || [] : []).map((genre) => [genre.id, genre.name])),
   }
 }
 

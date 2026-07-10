@@ -9,7 +9,13 @@ function delay(ms) {
 }
 
 async function fetchJson(url, options = {}) {
-  const response = await fetch(url, { ...options, signal: AbortSignal.timeout(requestTimeout) })
+  let response
+  try {
+    response = await fetch(url, { ...options, signal: AbortSignal.timeout(requestTimeout) })
+  } catch (error) {
+    const reason = error?.cause?.code || error?.cause?.message || error?.message || String(error)
+    throw new Error(`无法连接上游服务 ${url.hostname}: ${reason}`)
+  }
   const body = await response.text()
   if (!response.ok) {
     throw new Error(`上游接口 ${response.status}: ${body.slice(0, 200)}`)
