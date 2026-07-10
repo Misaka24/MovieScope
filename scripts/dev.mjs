@@ -41,7 +41,7 @@ if (web.occupied && !web.expected) {
 }
 
 if (api.expected) console.log('复用已运行的 MovieScope API：http://127.0.0.1:8787')
-else commands.push(spawn(process.execPath, ['server/server.mjs'], { stdio: 'inherit', shell: false }))
+else commands.push(spawn(process.execPath, ['--watch', 'server/server.mjs'], { stdio: 'inherit', shell: false }))
 
 if (web.expected) console.log('复用已运行的 MovieScope 前端：http://127.0.0.1:5173')
 else commands.push(spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1'], { stdio: 'inherit', shell: false }))
