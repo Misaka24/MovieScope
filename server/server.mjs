@@ -48,10 +48,16 @@ const server = createServer(async (request, response) => {
   }
 })
 
-await getDatabase()
-server.listen(port, '127.0.0.1', () => {
-  console.log(`MovieScope API: http://127.0.0.1:${port}`)
-})
+try {
+  await getDatabase()
+  server.listen(port, '127.0.0.1', () => {
+    console.log(`MovieScope API: http://127.0.0.1:${port}`)
+  })
+} catch (error) {
+  console.error('MovieScope API 启动失败。')
+  console.error(error instanceof Error ? error.message : error)
+  process.exitCode = 1
+}
 
 let closing = false
 async function shutdown() {
