@@ -7,8 +7,8 @@ try {
   const db = await getDatabase()
   const summary = await db.query(
   `SELECT provider,
-          COUNT(*)::int AS cache_count,
-          COUNT(*) FILTER (WHERE expires_at > NOW())::int AS active_count,
+          COUNT(*) AS cache_count,
+          SUM(expires_at > UTC_TIMESTAMP()) AS active_count,
           MIN(fetched_at) AS oldest_fetch,
           MAX(fetched_at) AS newest_fetch
      FROM api_cache
@@ -32,7 +32,7 @@ try {
   }
   await db.close()
 } catch (error) {
-  console.error('无法打开缓存数据库。请先停止 API 服务，再重新执行此命令。')
+  console.error('无法连接 MySQL 缓存数据库。')
   console.error(error instanceof Error ? error.message : error)
   process.exitCode = 1
 }

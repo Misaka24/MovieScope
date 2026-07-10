@@ -1,14 +1,20 @@
 import { getDatabase } from './database.mjs'
 
+function parsePayload(value) {
+  if (typeof value === 'string') return JSON.parse(value)
+  return value
+}
+
 export async function getCachedValue(cacheKey) {
   const db = await getDatabase()
   const result = await db.query(
     `SELECT payload, fetched_at, expires_at
        FROM api_cache
-      WHERE cache_key = $1 AND expires_at > NOW()`,
+      WHERE cache_key = ? AND expires_at > UTC_TIMESTAMP()`,
     [cacheKey],
   )
-  return result.rows[0] || null
+  const row = result.rows[0]
+  return row ? { ...row, payload: parsePayload(row.payload) } : null
 }
 
 export async function getLatestCachedValue(cacheKey) {
@@ -16,25 +22,27 @@ export async function getLatestCachedValue(cacheKey) {
   const result = await db.query(
     `SELECT payload, fetched_at, expires_at
        FROM api_cache
-      WHERE cache_key = $1
-        AND fetched_at > NOW() - INTERVAL '30 days'`,
+      WHERE cache_key = ?
+        AND fetched_at > UTC_TIMESTAMP() - INTERVAL 30 DAY`,
     [cacheKey],
   )
-  return result.rows[0] || null
+  const row = result.rows[0]
+  return row ? { ...row, payload: parsePayload(row.payload) } : null
 }
 
 export async function putCachedValue({ cacheKey, provider, value, ttlMs }) {
   const db = await getDatabase()
+  const expiresAt = new Date(Date.now() + ttlMs)
   await db.query(
     `INSERT INTO api_cache (cache_key, provider, payload, fetched_at, expires_at, updated_at)
-     VALUES ($1, $2, $3::jsonb, NOW(), NOW() + ($4 * INTERVAL '1 millisecond'), NOW())
-     ON CONFLICT (cache_key) DO UPDATE SET
-       provider = EXCLUDED.provider,
-       payload = EXCLUDED.payload,
-       fetched_at = EXCLUDED.fetched_at,
-       expires_at = EXCLUDED.expires_at,
-       updated_at = NOW()`,
-    [cacheKey, provider, JSON.stringify(value), ttlMs],
+     VALUES (?, ?, ?, UTC_TIMESTAMP(), ?, UTC_TIMESTAMP())
+     ON DUPLICATE KEY UPDATE
+       provider = VALUES(provider),
+       payload = VALUES(payload),
+       fetched_at = VALUES(fetched_at),
+       expires_at = VALUES(expires_at),
+       updated_at = UTC_TIMESTAMP()`,
+    [cacheKey, provider, JSON.stringify(value), expiresAt],
   )
 }
 
@@ -42,7 +50,7 @@ export async function logProviderSync({ provider, operation, cacheKey, status, d
   const db = await getDatabase()
   await db.query(
     `INSERT INTO provider_sync_logs (provider, operation, cache_key, status, duration_ms, error_message)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
+     VALUES (?, ?, ?, ?, ?, ?)`,
     [provider, operation, cacheKey, status, Math.round(durationMs), errorMessage],
   )
 }

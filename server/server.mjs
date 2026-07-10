@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { loadEnv } from './env.mjs'
 import { getDatabase } from './database.mjs'
 import { getHomeData } from './home-service.mjs'
+import { discoverCatalog, getCatalogOptions, getPersonDetails, getTitleDetails, searchCatalog } from './catalog-service.mjs'
 
 loadEnv()
 
@@ -17,6 +18,10 @@ function sendJson(response, statusCode, body) {
     'Access-Control-Allow-Headers': 'Content-Type',
   })
   response.end(JSON.stringify(body))
+}
+
+function queryParams(url) {
+  return Object.fromEntries(url.searchParams.entries())
 }
 
 const server = createServer(async (request, response) => {
@@ -37,6 +42,47 @@ const server = createServer(async (request, response) => {
 
     if (request.method === 'GET' && url.pathname === '/api/v1/home') {
       const data = await getHomeData()
+      sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
+      return
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/v1/search') {
+      const data = await searchCatalog(queryParams(url))
+      sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
+      return
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/v1/discover') {
+      const params = queryParams(url)
+      const data = await discoverCatalog({
+        mediaType: params.media,
+        page: params.page,
+        sortBy: params.sort,
+        genres: params.genres,
+        year: params.year,
+        minRating: params.rating,
+        language: params.language,
+      })
+      sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
+      return
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/v1/catalog/options') {
+      const data = await getCatalogOptions()
+      sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
+      return
+    }
+
+    const titleMatch = url.pathname.match(/^\/api\/v1\/titles\/(movie|tv)\/(\d+)$/)
+    if (request.method === 'GET' && titleMatch) {
+      const data = await getTitleDetails(titleMatch[1], titleMatch[2])
+      sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
+      return
+    }
+
+    const personMatch = url.pathname.match(/^\/api\/v1\/people\/(\d+)$/)
+    if (request.method === 'GET' && personMatch) {
+      const data = await getPersonDetails(personMatch[1])
       sendJson(response, 200, { data, meta: { requestId: crypto.randomUUID() }, error: null })
       return
     }

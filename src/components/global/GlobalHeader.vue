@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, shallowRef } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 interface SearchType {
   label: string
@@ -11,6 +12,9 @@ const menuOpen = shallowRef(false)
 const searchOpen = shallowRef(false)
 const searchType = shallowRef<SearchType>({ label: '全部', icon: 'search', hint: '搜索电影、剧集、影人' })
 const root = shallowRef<HTMLElement>()
+const query = shallowRef('')
+const router = useRouter()
+const route = useRoute()
 
 const searchTypes: SearchType[] = [
   { label: '全部', icon: 'search', hint: '搜索电影、剧集、影人' },
@@ -33,6 +37,25 @@ const menuGroups = [
 function chooseSearchType(type: SearchType) {
   searchType.value = type
   searchOpen.value = false
+}
+
+function search() {
+  const value = query.value.trim()
+  if (!value) return
+  const typeMap: Record<string, string> = { '全部': 'multi', '影视作品': 'multi', '电影': 'movie', '剧集': 'tv', '影人': 'person', '关键词': 'keyword' }
+  router.push({ name: 'search', query: { q: value, type: typeMap[searchType.value.label] || 'multi' } })
+}
+
+function openMenuItem(group: string, item: string) {
+  menuOpen.value = false
+  const movieItems = new Set(['正在上映', '即将上映', '热门电影', '高分电影', '按类型浏览'])
+  const tvItems = new Set(['热门剧集', '高分剧集', '今日播出', '剧集资讯'])
+  if (group === '探索' || item === '地区与年份' || item === '观看平台') return router.push({ name: 'explore' })
+  if (item === 'IMDb Top 250') return router.push({ name: 'home', hash: '#高分榜' })
+  if (group === '影人') return router.push({ name: 'search', query: { type: 'person', q: item.replace('作品', '') } })
+  if (movieItems.has(item)) return router.push({ name: 'explore', query: { media: 'movie' } })
+  if (tvItems.has(item)) return router.push({ name: 'explore', query: { media: 'tv' } })
+  return router.push({ name: 'search', query: { q: item, type: 'multi' } })
 }
 
 function toggleMenu() {
@@ -58,6 +81,7 @@ function closeOnEscape(event: KeyboardEvent) {
 }
 
 onMounted(() => {
+  query.value = typeof route.query.q === 'string' ? route.query.q : ''
   document.addEventListener('click', closePanels)
   document.addEventListener('keydown', closeOnEscape)
 })
@@ -71,9 +95,9 @@ onBeforeUnmount(() => {
 <template>
   <header ref="root" class="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#121212] shadow-2xl">
     <div class="mx-auto flex h-[50px] w-full max-w-[1216px] items-center gap-2 px-3 md:px-6 lg:px-8">
-      <a href="/" class="flex-none rounded bg-primary-container px-2.5 py-1.5 text-[9.5px] font-black leading-none text-on-primary-container shadow-sm">
+      <RouterLink to="/" class="flex-none rounded bg-primary-container px-2.5 py-1.5 text-[9.5px] font-black leading-none text-on-primary-container shadow-sm">
         MOVIE<br>SCOPE
-      </a>
+      </RouterLink>
 
       <button class="header-action" type="button" :aria-expanded="menuOpen" @click.stop="toggleMenu">
         <span class="material-symbols-outlined text-xl">menu</span>
@@ -86,8 +110,8 @@ onBeforeUnmount(() => {
             <span class="hidden text-[13px] font-bold sm:inline">{{ searchType.label }}</span>
             <span class="material-symbols-outlined text-base">arrow_drop_down</span>
           </button>
-          <input class="min-w-0 flex-1 border-0 bg-transparent px-3 text-[13px] text-on-surface outline-none placeholder:text-on-surface-variant focus:ring-0" :placeholder="`在 MOVIESCOPE ${searchType.hint}`" type="search">
-          <button class="flex w-9 flex-none items-center justify-center text-on-surface-variant hover:text-primary" type="button" aria-label="搜索">
+          <input v-model="query" class="min-w-0 flex-1 border-0 bg-transparent px-3 text-[13px] text-on-surface outline-none placeholder:text-on-surface-variant focus:ring-0" :placeholder="`在 MOVIESCOPE ${searchType.hint}`" type="search" @keydown.enter="search">
+          <button class="flex w-9 flex-none items-center justify-center text-on-surface-variant hover:text-primary" type="button" aria-label="搜索" @click="search">
             <span class="material-symbols-outlined text-xl leading-none">search</span>
           </button>
         </div>
@@ -126,7 +150,7 @@ onBeforeUnmount(() => {
               {{ group.title }}
             </h2>
             <ul class="space-y-2 pl-7 text-sm text-on-surface-variant">
-              <li v-for="item in group.items" :key="item"><a href="#" class="hover:text-primary">{{ item }}</a></li>
+              <li v-for="item in group.items" :key="item"><button type="button" class="hover:text-primary" @click="openMenuItem(group.title, item)">{{ item }}</button></li>
             </ul>
           </section>
         </div>

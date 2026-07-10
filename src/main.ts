@@ -1,4 +1,5 @@
 import { createApp } from 'vue'
-import HomeView from './pages/HomeView.vue'
+import App from './App.vue'
+import { router } from './router'
 
-createApp(HomeView).mount('#app')
+createApp(App).use(router).mount('#app')
