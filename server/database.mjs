@@ -44,6 +44,7 @@ async function createDatabase() {
 }
 
 export async function getDatabase() {
+  if (globalThis.__moviescopeDatabaseForTest) return globalThis.__moviescopeDatabaseForTest
   if (!databasePromise) {
     databasePromise = createDatabase().catch((error) => {
       databasePromise = undefined

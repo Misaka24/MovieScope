@@ -4,7 +4,9 @@ import { loadEnv } from './env.mjs'
 import { getDatabase } from './database.mjs'
 import { getHomeData } from './home-service.mjs'
 import { discoverCatalog,getBrowsePage,getCatalogOptions,getIndustryNews,getPersonDetails,getPopularPeople,getTitleDetails,getWatchProviders,resolveTitleId,searchCatalog } from './catalog-service.mjs'
-import { adminListReviews,adminListUsers,adminLogs,adminModerateReview,adminUpdateUser,authenticateUser,changePassword,clearHistory,createSession,deleteMediaEntry,getAdminOverview,getCommunityReviews,getHistory,getMediaEntry,getOwnProfile,getPublicProfile,getSessionUser,httpError,listMediaEntries,recordBrowse,recordSearch,registerUser,revokeSession,sessionDays,updateProfile,upsertMediaEntry } from './user-service.mjs'
+import { authenticateUser,changePassword,clearHistory,createSession,deleteMediaEntry,getCommunityReviews,getHistory,getMediaEntry,getOwnProfile,getPublicProfile,getSessionUser,httpError,listMediaEntries,recordBrowse,recordSearch,registerUser,revokeSession,sessionDays,updateProfile,upsertMediaEntry } from './user-service.mjs'
+import { adminAnalytics,adminBulkUsers,adminCache,adminDeleteCache,adminDeleteGroup,adminDeleteProvider,adminGroups,adminLogs,adminModerate,adminOverview,adminProviders,adminPutCache,adminReviews,adminSaveGroup,adminSaveProvider,adminSaveSetting,adminSetUserAccess,adminSettings,adminTestProvider,adminUpdateUser,adminUserDetail,adminUsers,getAdminAccess,isRegistrationEnabled,publicSettings,requireAdminPermission } from './admin-service.mjs'
+import { getSettingValue } from './runtime-config.mjs'
 
 loadEnv()
 const port=Number(process.env.API_PORT||8787),allowedOrigin=process.env.WEB_ORIGIN||'http://127.0.0.1:5173',cookieName='moviescope_session'
@@ -19,6 +21,7 @@ function clientIp(request){return String(request.headers['x-forwarded-for']||req
 async function authUser(request){return getSessionUser(cookies(request)[cookieName])}
 async function requireUser(request){const user=await authUser(request);if(!user)throw httpError(401,'请先登录','AUTH_REQUIRED');return user}
 async function requireAdmin(request){const user=await requireUser(request);if(user.role!=='admin')throw httpError(403,'需要管理员权限','ADMIN_REQUIRED');return user}
+async function requirePermission(request,key){const user=await requireAdmin(request);await requireAdminPermission(user,key);return user}
 function mediaPayload(details){return{mediaType:details.mediaType,tmdbId:details.id,imdbId:details.imdbId,title:details.title,posterUrl:details.poster,releaseYear:details.year}}
 
 const server=createServer(async(request,response)=>{
@@ -26,11 +29,13 @@ const server=createServer(async(request,response)=>{
   if(request.method==='OPTIONS'){response.writeHead(204,{'Access-Control-Allow-Origin':allowedOrigin,'Access-Control-Allow-Credentials':'true','Access-Control-Allow-Methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','Access-Control-Allow-Headers':'Content-Type','Vary':'Origin'});response.end();return}
   try{
     if(!['GET','HEAD','OPTIONS'].includes(request.method||'GET')){const origin=request.headers.origin;if(origin&&origin!==allowedOrigin)throw httpError(403,'请求来源不受信任','INVALID_ORIGIN')}
+    if(!url.pathname.startsWith('/api/v1/admin')&&!['/api/v1/health','/api/v1/auth/me','/api/v1/auth/login','/api/v1/auth/logout','/api/v1/settings/public'].includes(url.pathname)&&await getSettingValue('maintenance_mode',false)){const user=await authUser(request);if(user?.role!=='admin')throw httpError(503,'网站正在维护，请稍后再试','MAINTENANCE_MODE')}
     if(request.method==='GET'&&url.pathname==='/api/v1/health'){const db=await getDatabase();await db.query('SELECT 1 AS ok');success(response,{status:'ok',database:db.mode});return}
-    if(request.method==='POST'&&url.pathname==='/api/v1/auth/register'){const body=await readJson(request),user=await registerUser(body),session=await createSession(user.id,{ip:clientIp(request),userAgent:request.headers['user-agent']});success(response,{user},201,{'Set-Cookie':sessionCookie(session.token,session.expiresAt)});return}
+    if(request.method==='POST'&&url.pathname==='/api/v1/auth/register'){if(!(await isRegistrationEnabled()))throw httpError(403,'网站当前暂停注册','REGISTRATION_DISABLED');const body=await readJson(request),user=await registerUser(body),session=await createSession(user.id,{ip:clientIp(request),userAgent:request.headers['user-agent']});success(response,{user},201,{'Set-Cookie':sessionCookie(session.token,session.expiresAt)});return}
     if(request.method==='POST'&&url.pathname==='/api/v1/auth/login'){const body=await readJson(request),user=await authenticateUser(body.identifier,body.password,clientIp(request)),session=await createSession(user.id,{ip:clientIp(request),userAgent:request.headers['user-agent']});success(response,{user},200,{'Set-Cookie':sessionCookie(session.token,session.expiresAt)});return}
     if(request.method==='POST'&&url.pathname==='/api/v1/auth/logout'){await revokeSession(cookies(request)[cookieName]);success(response,{loggedOut:true},200,{'Set-Cookie':clearCookie()});return}
-    if(request.method==='GET'&&url.pathname==='/api/v1/auth/me'){success(response,{user:await authUser(request)});return}
+    if(request.method==='GET'&&url.pathname==='/api/v1/auth/me'){const user=await authUser(request);success(response,{user,adminAccess:user?.role==='admin'?await getAdminAccess(user.id):null});return}
+    if(request.method==='GET'&&url.pathname==='/api/v1/settings/public'){success(response,await publicSettings());return}
     if(request.method==='GET'&&url.pathname==='/api/v1/me/profile'){const user=await requireUser(request);success(response,await getOwnProfile(user.id));return}
     if(request.method==='PUT'&&url.pathname==='/api/v1/me/profile'){const user=await requireUser(request);success(response,{user:await updateProfile(user.id,await readJson(request))});return}
     if(request.method==='PUT'&&url.pathname==='/api/v1/me/password'){const user=await requireUser(request),body=await readJson(request);await changePassword(user.id,body.currentPassword,body.nextPassword);success(response,{changed:true},200,{'Set-Cookie':clearCookie()});return}
@@ -47,14 +52,39 @@ const server=createServer(async(request,response)=>{
     const publicProfile=url.pathname.match(/^\/api\/v1\/users\/([^/]+)$/)
     if(publicProfile&&request.method==='GET'){const viewer=await authUser(request);success(response,await getPublicProfile(decodeURIComponent(publicProfile[1]),viewer?.id));return}
 
-    if(request.method==='GET'&&url.pathname==='/api/v1/admin/overview'){await requireAdmin(request);success(response,await getAdminOverview());return}
-    if(request.method==='GET'&&url.pathname==='/api/v1/admin/users'){await requireAdmin(request);success(response,await adminListUsers(queryParams(url)));return}
+    if(request.method==='GET'&&url.pathname==='/api/v1/admin/access'){const admin=await requireAdmin(request);success(response,await getAdminAccess(admin.id));return}
+    if(request.method==='GET'&&url.pathname==='/api/v1/admin/overview'){await requirePermission(request,'dashboard.view');success(response,await adminOverview());return}
+    if(request.method==='GET'&&url.pathname==='/api/v1/admin/analytics'){await requirePermission(request,'analytics.view');success(response,await adminAnalytics());return}
+    if(request.method==='GET'&&url.pathname==='/api/v1/admin/users'){await requirePermission(request,'users.view');success(response,await adminUsers(queryParams(url)));return}
+    if(request.method==='POST'&&url.pathname==='/api/v1/admin/users/bulk'){const admin=await requirePermission(request,'users.manage');success(response,await adminBulkUsers(admin,await readJson(request),clientIp(request)));return}
     const adminUser=url.pathname.match(/^\/api\/v1\/admin\/users\/(\d+)$/)
-    if(adminUser&&request.method==='PATCH'){const admin=await requireAdmin(request);success(response,await adminUpdateUser(admin,Number(adminUser[1]),await readJson(request),clientIp(request)));return}
-    if(request.method==='GET'&&url.pathname==='/api/v1/admin/reviews'){await requireAdmin(request);success(response,await adminListReviews(queryParams(url)));return}
+    if(adminUser&&request.method==='GET'){await requirePermission(request,'users.view');success(response,await adminUserDetail(Number(adminUser[1])));return}
+    if(adminUser&&request.method==='PATCH'){const admin=await requirePermission(request,'users.manage');success(response,await adminUpdateUser(admin,Number(adminUser[1]),await readJson(request),clientIp(request)));return}
+    const adminUserAccess=url.pathname.match(/^\/api\/v1\/admin\/users\/(\d+)\/access$/)
+    if(adminUserAccess&&request.method==='PUT'){const admin=await requirePermission(request,'users.permissions');success(response,await adminSetUserAccess(admin,Number(adminUserAccess[1]),await readJson(request),clientIp(request)));return}
+    if(request.method==='GET'&&url.pathname==='/api/v1/admin/groups'){await requirePermission(request,'users.permissions');success(response,await adminGroups());return}
+    if(request.method==='POST'&&url.pathname==='/api/v1/admin/groups'){const admin=await requirePermission(request,'users.permissions');success(response,await adminSaveGroup(admin,await readJson(request),clientIp(request)),201);return}
+    const adminGroup=url.pathname.match(/^\/api\/v1\/admin\/groups\/(\d+)$/)
+    if(adminGroup&&request.method==='PUT'){const admin=await requirePermission(request,'users.permissions');success(response,await adminSaveGroup(admin,await readJson(request),clientIp(request),Number(adminGroup[1])));return}
+    if(adminGroup&&request.method==='DELETE'){const admin=await requirePermission(request,'users.permissions');success(response,await adminDeleteGroup(admin,Number(adminGroup[1]),clientIp(request)));return}
+    if(request.method==='GET'&&url.pathname==='/api/v1/admin/reviews'){await requirePermission(request,'reviews.view');success(response,await adminReviews(queryParams(url)));return}
+    if(request.method==='POST'&&url.pathname==='/api/v1/admin/reviews/moderate'){const admin=await requirePermission(request,'reviews.moderate'),body=await readJson(request);success(response,await adminModerate(admin,body.entryIds,body.status,clientIp(request)));return}
     const adminReview=url.pathname.match(/^\/api\/v1\/admin\/reviews\/(\d+)$/)
-    if(adminReview&&request.method==='PATCH'){const admin=await requireAdmin(request),body=await readJson(request);await adminModerateReview(admin,Number(adminReview[1]),body.status,clientIp(request));success(response,{updated:true});return}
-    if(request.method==='GET'&&url.pathname==='/api/v1/admin/logs'){await requireAdmin(request);success(response,await adminLogs());return}
+    if(adminReview&&request.method==='PATCH'){const admin=await requirePermission(request,'reviews.moderate'),body=await readJson(request);success(response,await adminModerate(admin,Number(adminReview[1]),body.status,clientIp(request)));return}
+    if(request.method==='GET'&&url.pathname==='/api/v1/admin/providers'){await requirePermission(request,'providers.view');success(response,await adminProviders());return}
+    if(request.method==='POST'&&url.pathname==='/api/v1/admin/providers'){const admin=await requirePermission(request,'providers.manage');success(response,await adminSaveProvider(admin,await readJson(request),clientIp(request)),201);return}
+    const adminProvider=url.pathname.match(/^\/api\/v1\/admin\/providers\/([a-zA-Z0-9_-]+)$/)
+    if(adminProvider&&request.method==='PUT'){const admin=await requirePermission(request,'providers.manage');success(response,await adminSaveProvider(admin,await readJson(request),clientIp(request),adminProvider[1]));return}
+    if(adminProvider&&request.method==='DELETE'){const admin=await requirePermission(request,'providers.manage');success(response,await adminDeleteProvider(admin,adminProvider[1],clientIp(request)));return}
+    const adminProviderTest=url.pathname.match(/^\/api\/v1\/admin\/providers\/([a-zA-Z0-9_-]+)\/test$/)
+    if(adminProviderTest&&request.method==='POST'){const admin=await requirePermission(request,'providers.test');success(response,await adminTestProvider(admin,adminProviderTest[1],clientIp(request)));return}
+    if(request.method==='GET'&&url.pathname==='/api/v1/admin/cache'){await requirePermission(request,'cache.view');success(response,await adminCache(queryParams(url)));return}
+    if(request.method==='PUT'&&url.pathname==='/api/v1/admin/cache'){const admin=await requirePermission(request,'cache.manage');success(response,await adminPutCache(admin,await readJson(request),clientIp(request)));return}
+    if(request.method==='DELETE'&&url.pathname==='/api/v1/admin/cache'){const admin=await requirePermission(request,'cache.manage');success(response,await adminDeleteCache(admin,await readJson(request),clientIp(request)));return}
+    if(request.method==='GET'&&url.pathname==='/api/v1/admin/logs'){await requirePermission(request,'logs.view');success(response,await adminLogs(queryParams(url)));return}
+    if(request.method==='GET'&&url.pathname==='/api/v1/admin/settings'){await requirePermission(request,'settings.view');success(response,await adminSettings());return}
+    const adminSetting=url.pathname.match(/^\/api\/v1\/admin\/settings\/([a-zA-Z0-9_-]+)$/)
+    if(adminSetting&&request.method==='PUT'){const admin=await requirePermission(request,'settings.manage');success(response,await adminSaveSetting(admin,adminSetting[1],await readJson(request),clientIp(request)));return}
 
     if(request.method==='GET'&&url.pathname==='/api/v1/home'){success(response,await getHomeData());return}
     if(request.method==='GET'&&url.pathname==='/api/v1/search'){const params=queryParams(url),data=await searchCatalog(params),user=await authUser(request);if(user&&params.query)await recordSearch(user.id,{query:params.query,type:params.type});success(response,data);return}
