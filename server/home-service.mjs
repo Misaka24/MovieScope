@@ -243,9 +243,9 @@ export async function getHomeData() {
 
   const source = (name) => sources.find((item) => item.name === name)
   const imdbTopBase = (source('imdb-top-250')?.data?.titleChartRankings?.edges || []).map(toImdbMedia)
-  const nowPlayingRaw = (source('tmdb-now-playing')?.data?.results || []).slice(0, 6)
-  const popularMoviesRaw = (source('tmdb-popular-movies')?.data?.results || []).slice(0, 6)
-  const popularTvRaw = (source('tmdb-popular-tv')?.data?.results || []).slice(0, 6)
+  const nowPlayingRaw = (source('tmdb-now-playing')?.data?.results || []).slice(0, 8)
+  const popularMoviesRaw = (source('tmdb-popular-movies')?.data?.results || []).slice(0, 8)
+  const popularTvRaw = (source('tmdb-popular-tv')?.data?.results || []).slice(0, 8)
   const nowPlayingUnlocalized = nowPlayingRaw.map((item) => toTmdbMedia(item, 'movie', genres.movie))
   const popularMoviesUnlocalized = popularMoviesRaw.map((item) => toTmdbMedia(item, 'movie', genres.movie))
   const popularTvUnlocalized = popularTvRaw.map((item) => toTmdbMedia(item, 'tv', genres.tv))
@@ -253,13 +253,13 @@ export async function getHomeData() {
     .map((item) => toTmdbMedia(item, 'movie', genres.movie))
     .filter((item) => item.backdrop && item.title)
   const tmdbTopRatedUnlocalized = (source('tmdb-top-rated')?.data?.results || [])
-    .slice(0, 6)
+    .slice(0, 8)
     .map((item) => ({
       ...toTmdbMedia(item, 'movie', genres.movie),
       ratingDisplay: { imdb: 'tmdb-fallback' },
     }))
   const [imdbTop, localizedGroups] = await Promise.all([
-    localizeImdbTitles(imdbTopBase.slice(0, 6)),
+    localizeImdbTitles(imdbTopBase.slice(0, 8)),
     localizeTmdbGroups([
       nowPlayingUnlocalized,
       popularMoviesUnlocalized,
@@ -281,7 +281,7 @@ export async function getHomeData() {
     hero,
     sections: {
       nowPlaying,
-      topRated: imdbTop.length ? imdbTop.slice(0, 6) : tmdbTopRated,
+      topRated: imdbTop.length ? imdbTop.slice(0, 8) : tmdbTopRated,
       popularMovies,
       popularTv,
       news,

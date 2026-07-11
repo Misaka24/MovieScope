@@ -24,7 +24,7 @@ function formatDate(value: string | null) {
 <template>
   <section id="影坛动态" class="scroll-mt-16 py-8">
     <div class="mb-5 flex items-end justify-between"><div><h2 class="text-xl font-extrabold text-on-surface md:text-2xl">影坛动态</h2><p class="mt-1.5 text-[13px] text-on-surface-variant">电影行业的最新动态与报道。</p></div></div>
-    <div v-if="items.length" class="grid gap-5 lg:grid-cols-3">
+    <div v-if="items.length" class="grid gap-5 lg:grid-cols-3 2xl:gap-6">
       <article v-for="news in visibleItems" :key="news.id" class="group flex min-h-full flex-col overflow-hidden rounded-lg border border-white/5 bg-surface-container-low">
         <div v-if="news.image" class="aspect-[16/9] overflow-hidden"><img :src="news.image" :alt="news.title" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy"></div>
         <div class="flex flex-1 flex-col p-[18px]" :class="{ 'min-h-[230px] justify-center': !news.image }"><div class="mb-2.5 flex items-center justify-between gap-3 text-xs font-bold"><span class="text-primary">{{ news.category }}</span><span class="text-on-surface-variant">{{ formatDate(news.publishedAt) }}</span></div><h3 class="text-[17px] font-extrabold leading-[26px] text-on-surface group-hover:text-primary">{{ news.title }}</h3><p class="mt-2.5 line-clamp-3 text-[13px] leading-[21px] text-on-surface-variant">{{ news.summary }}</p><a v-if="news.url" :href="news.url" target="_blank" rel="noreferrer" class="mt-4 inline-flex items-center gap-1 self-start text-[13px] font-bold text-primary">阅读全文<span class="material-symbols-outlined text-lg">arrow_forward</span></a></div>
