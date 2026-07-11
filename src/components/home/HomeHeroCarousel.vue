@@ -41,7 +41,7 @@ function handleImageLoad(id: string) {
       <div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-black/20"></div>
       <div v-if="imageLoading && !activeImageReady" class="absolute inset-0 bg-surface-container-lowest/35 transition-opacity duration-300"></div>
 
-      <div class="relative z-10 mx-auto flex h-full max-w-[1680px] items-end px-4 pb-16 pt-14 md:px-8 md:pb-[68px] xl:px-10 2xl:px-12">
+      <div class="relative z-10 mx-auto flex h-full max-w-[1216px] items-end px-4 pb-16 pt-14 md:px-8 md:pb-[68px] 2xl:max-w-[1480px] 2xl:px-10 min-[1800px]:max-w-[1680px] min-[1800px]:px-12">
         <div class="hero-copy-stage grid w-full max-w-[680px]">
           <div
             v-for="movie in movies"

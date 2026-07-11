@@ -21,8 +21,17 @@ function exploreQuery(id: string) {
       </div>
       <RouterLink :to="{ name: 'explore', query: exploreQuery(id) }" class="hidden items-center gap-0.5 text-xs font-bold text-primary hover:underline sm:flex">查看全部<span class="material-symbols-outlined text-base">chevron_right</span></RouterLink>
     </div>
-    <div class="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:gap-5 lg:grid-cols-6 2xl:grid-cols-7 2xl:gap-6 min-[1800px]:grid-cols-8">
+    <div class="home-media-grid grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:gap-5 lg:grid-cols-6 2xl:grid-cols-7 2xl:gap-6 min-[1800px]:grid-cols-8">
       <MediaPosterCard v-for="item in items" :key="item.id" :item="item" />
     </div>
   </section>
 </template>
+
+<style scoped>
+@media (min-width: 1024px) and (max-width: 1535px) {
+  .home-media-grid > :nth-child(n + 7) { display: none; }
+}
+@media (min-width: 1536px) and (max-width: 1799px) {
+  .home-media-grid > :nth-child(n + 8) { display: none; }
+}
+</style>
