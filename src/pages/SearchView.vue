@@ -17,11 +17,12 @@ const draft = reactive({ genres: [] as number[], yearFrom: '', yearTo: '', minRa
 const mobileFilters = ref(false)
 const bookmarks = ref<Set<string>>(new Set())
 const yearPresets = [
-  { label: '近两年', from: new Date().getFullYear() - 1, to: new Date().getFullYear() },
   { label: '2020年代', from: 2020, to: 2029 },
   { label: '2010年代', from: 2010, to: 2019 },
   { label: '2000年代', from: 2000, to: 2009 },
-  { label: '经典影片', from: 1900, to: 1999 },
+  { label: '1990年代', from: 1990, to: 1999 },
+  { label: '1980年代', from: 1980, to: 1989 },
+  { label: '更早', from: 1900, to: 1979 },
 ]
 const q = computed(() => typeof route.query.q === 'string' ? route.query.q : '')
 const type = computed(() => (typeof route.query.type === 'string' ? route.query.type : 'multi') as SearchType)
@@ -60,11 +61,11 @@ watch(q, () => clearFilters())
 
 <template>
 <div class="min-h-screen bg-background text-on-surface"><GlobalHeader />
-<main class="mx-auto flex max-w-[1216px] gap-6 px-4 pb-12 pt-[74px] md:px-8">
+<main class="mx-auto flex max-w-[1440px] gap-6 px-4 pb-12 pt-[74px] md:px-6">
 <button class="fixed bottom-5 right-5 z-30 flex h-11 items-center gap-2 rounded-full bg-primary-container px-4 text-sm font-bold text-on-primary-container shadow-xl lg:hidden" @click="mobileFilters=true"><span class="material-symbols-outlined">tune</span>筛选</button>
 <div v-if="mobileFilters" class="fixed inset-0 z-[60] bg-black/65 lg:hidden" @click.self="mobileFilters=false"></div>
 <aside :class="mobileFilters ? 'fixed inset-y-0 left-0 z-[70] w-[310px] overflow-y-auto p-4 pt-6' : 'hidden'" class="flex-none bg-background lg:sticky lg:top-[66px] lg:block lg:h-fit lg:w-72 lg:p-0">
-<div class="filter-panel space-y-6">
+<div class="filter-panel space-y-5">
 <div class="flex items-center justify-between border-b border-white/10 pb-4"><div><h2 class="text-base font-extrabold">筛选结果</h2><p class="mt-1 text-[11px] text-on-surface-variant">当前页面即时筛选</p></div><button class="rounded px-2 py-1 text-[11px] font-bold text-primary transition-colors hover:bg-primary/10" @click="clearFilters">重置</button></div>
 <section><h3 class="filter-title"><span class="material-symbols-outlined">category</span>影视类型</h3><div class="genre-options"><label v-for="genre in genreOptions" :key="genre.id" class="genre-option"><input v-model="draft.genres" :value="genre.id" type="checkbox"><span>{{ genre.name }}</span></label></div></section>
 <section><h3 class="filter-title"><span class="material-symbols-outlined">calendar_month</span>发行年份</h3><div class="year-presets"><button v-for="preset in yearPresets" :key="preset.label" type="button" :class="{active:isYearPreset(preset.from,preset.to)}" @click="setYearPreset(preset.from,preset.to)">{{preset.label}}</button></div><div class="year-range"><input v-model="draft.yearFrom" class="filter-input" placeholder="起始年份" inputmode="numeric"><span>至</span><input v-model="draft.yearTo" class="filter-input" placeholder="结束年份" inputmode="numeric"></div></section>

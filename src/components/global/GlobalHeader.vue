@@ -120,7 +120,7 @@ onBeforeUnmount(() => {
 
 <template>
   <header ref="root" class="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#121212] shadow-2xl">
-    <div class="mx-auto flex h-[50px] w-full max-w-[1216px] items-center gap-2 px-3 md:px-6 lg:px-8">
+    <div class="mx-auto flex h-[50px] w-full max-w-[1440px] items-center gap-2 px-3 md:px-6">
       <RouterLink to="/" class="flex-none rounded bg-primary-container px-2.5 py-1.5 text-[9.5px] font-black leading-none text-on-primary-container shadow-sm">
         MOVIE<br>SCOPE
       </RouterLink>

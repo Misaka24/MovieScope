@@ -1,6 +1,6 @@
 <template>
   <footer class="border-t border-white/5 bg-surface-container-lowest">
-    <div class="mx-auto grid max-w-[1216px] gap-8 px-4 py-9 md:grid-cols-4 md:px-8">
+    <div class="mx-auto grid max-w-[1440px] gap-8 px-4 py-9 md:grid-cols-4 md:px-6">
       <div>
         <div class="text-lg font-black text-primary">MOVIESCOPE</div>
         <p class="mt-3 text-[13px] leading-[21px] text-on-surface-variant">为电影爱好者提供搜索、发现、评分与观影记录服务。</p>
