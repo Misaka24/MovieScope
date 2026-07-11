@@ -197,10 +197,12 @@ export async function adminMediaAnalytics(params = {}) {
   const mediaType = ["movie", "tv"].includes(params.mediaType)
     ? params.mediaType
     : "";
-  const language = clean(params.language, 32);
-  const genre = clean(params.genre, 80);
-  const minRating = Number(params.minRating);
-  const maxRating = Number(params.maxRating);
+  const language = clean(params.language, 32),
+    genre = clean(params.genre, 80);
+  const yearFrom = integer(params.yearFrom, 0, 0, 9999),
+    yearTo = integer(params.yearTo, 0, 0, 9999);
+  const minRating = Number(params.minRating),
+    maxRating = Number(params.maxRating);
   const filters = [],
     values = [];
   if (mediaType) {
@@ -210,6 +212,14 @@ export async function adminMediaAnalytics(params = {}) {
   if (language) {
     filters.push("e.original_language=?");
     values.push(language);
+  }
+  if (yearFrom) {
+    filters.push("e.release_year>=?");
+    values.push(yearFrom);
+  }
+  if (yearTo) {
+    filters.push("e.release_year<=?");
+    values.push(yearTo);
   }
   if (Number.isFinite(minRating) && minRating > 0) {
     filters.push("e.rating>=?");
@@ -239,92 +249,142 @@ export async function adminMediaAnalytics(params = {}) {
     score: "averageRating",
     watching: "watchingCount",
     watched: "watchedCount",
+    want: "wantCount",
   };
-  const sort = sortMap[params.sort] || "records";
-  const limit = integer(params.limit, 50, 10, 200);
-  const [summary, titles, mediaTypes, languages, ratings, statuses, genres] =
-    await Promise.all([
-      db.query(
-        "SELECT COUNT(*) records,COUNT(DISTINCT user_id) users,COUNT(DISTINCT CONCAT(media_type,':',tmdb_id)) titles,SUM(is_favorite=TRUE) favorites,SUM(rating IS NOT NULL) ratings,SUM(review_text IS NOT NULL AND review_text<>'') reviews,ROUND(AVG(rating),2) averageRating FROM user_media_entries e" +
-          where,
-        values,
-      ),
-      db.query(
-        "SELECT " +
-          groupFields +
-          "," +
-          aggregate +
-          " FROM user_media_entries e" +
-          where +
-          " GROUP BY " +
-          groupFields +
-          " ORDER BY " +
-          sort +
-          " DESC,records DESC LIMIT ?",
-        [...values, limit],
-      ),
-      db.query(
-        "SELECT e.media_type label,COUNT(*) count FROM user_media_entries e" +
-          where +
-          " GROUP BY e.media_type ORDER BY count DESC",
-        values,
-      ),
-      db.query(
-        "SELECT COALESCE(NULLIF(e.original_language,''),'unknown') label,COUNT(*) count,ROUND(AVG(e.rating),2) averageRating FROM user_media_entries e" +
-          where +
-          " GROUP BY label ORDER BY count DESC LIMIT 20",
-        values,
-      ),
-      db.query(
-        "SELECT CASE WHEN e.rating IS NULL THEN '未评分' WHEN e.rating<4 THEN '0-3.9' WHEN e.rating<6 THEN '4-5.9' WHEN e.rating<8 THEN '6-7.9' ELSE '8-10' END label,COUNT(*) count FROM user_media_entries e" +
-          where +
-          " GROUP BY label ORDER BY MIN(COALESCE(e.rating,-1))",
-        values,
-      ),
-      db.query(
-        "SELECT COALESCE(e.watch_status,'无观影状态') label,COUNT(*) count FROM user_media_entries e" +
-          where +
-          " GROUP BY label ORDER BY count DESC",
-        values,
-      ),
-      db.query(
-        "SELECT jt.genre label,COUNT(*) count,ROUND(AVG(e.rating),2) averageRating FROM user_media_entries e JOIN JSON_TABLE(COALESCE(e.genres_json,JSON_ARRAY()), '$[*]' COLUMNS(genre VARCHAR(80) PATH '$')) jt" +
-          where +
-          " GROUP BY jt.genre ORDER BY count DESC LIMIT 24",
-        values,
-      ),
-    ]);
+  const sort = sortMap[params.sort] || "records",
+    limit = integer(params.limit, 50, 10, 200);
+  const [
+    summary,
+    titles,
+    mediaTypes,
+    languages,
+    ratings,
+    statuses,
+    genres,
+    years,
+    countries,
+    trend,
+    topTrend,
+  ] = await Promise.all([
+    db.query(
+      "SELECT COUNT(*) records,COUNT(DISTINCT user_id) users,COUNT(DISTINCT CONCAT(media_type,':',tmdb_id)) titles,COALESCE(SUM(watch_status='want'),0) wantCount,COALESCE(SUM(watch_status='watching'),0) watchingCount,COALESCE(SUM(watch_status='watched'),0) watchedCount,COALESCE(SUM(is_favorite=TRUE),0) favorites,COALESCE(SUM(rating IS NOT NULL),0) ratings,COALESCE(SUM(review_text IS NOT NULL AND review_text<>''),0) reviews,ROUND(AVG(rating),2) averageRating FROM user_media_entries e" +
+        where,
+      values,
+    ),
+    db.query(
+      "SELECT " +
+        groupFields +
+        "," +
+        aggregate +
+        " FROM user_media_entries e" +
+        where +
+        " GROUP BY " +
+        groupFields +
+        " ORDER BY " +
+        sort +
+        " DESC,records DESC LIMIT ?",
+      [...values, limit],
+    ),
+    db.query(
+      "SELECT e.media_type label,COUNT(*) count FROM user_media_entries e" +
+        where +
+        " GROUP BY e.media_type ORDER BY count DESC",
+      values,
+    ),
+    db.query(
+      "SELECT COALESCE(NULLIF(e.original_language,''),'unknown') label,COUNT(*) count,ROUND(AVG(e.rating),2) averageRating FROM user_media_entries e" +
+        where +
+        " GROUP BY label ORDER BY count DESC LIMIT 30",
+      values,
+    ),
+    db.query(
+      "SELECT CASE WHEN e.rating IS NULL THEN '未评分' WHEN e.rating<4 THEN '0-3.9' WHEN e.rating<6 THEN '4-5.9' WHEN e.rating<8 THEN '6-7.9' ELSE '8-10' END label,COUNT(*) count FROM user_media_entries e" +
+        where +
+        " GROUP BY label ORDER BY MIN(COALESCE(e.rating,-1))",
+      values,
+    ),
+    db.query(
+      "SELECT COALESCE(e.watch_status,'无观影状态') label,COUNT(*) count FROM user_media_entries e" +
+        where +
+        " GROUP BY label ORDER BY count DESC",
+      values,
+    ),
+    db.query(
+      "SELECT jt.genre label,COUNT(*) count,ROUND(AVG(e.rating),2) averageRating FROM user_media_entries e JOIN JSON_TABLE(COALESCE(e.genres_json,JSON_ARRAY()), '$[*]' COLUMNS(genre VARCHAR(80) PATH '$')) jt" +
+        where +
+        " GROUP BY jt.genre ORDER BY count DESC LIMIT 30",
+      values,
+    ),
+    db.query(
+      "SELECT COALESCE(CAST(e.release_year AS CHAR),'未知年份') label,COUNT(*) count,ROUND(AVG(e.rating),2) averageRating FROM user_media_entries e" +
+        where +
+        " GROUP BY e.release_year ORDER BY e.release_year DESC LIMIT 40",
+      values,
+    ),
+    db.query(
+      "SELECT COALESCE(NULLIF(e.origin_country,''),'unknown') label,COUNT(*) count FROM user_media_entries e" +
+        where +
+        " GROUP BY label ORDER BY count DESC LIMIT 20",
+      values,
+    ),
+    db.query(
+      "SELECT DATE(day) date,COALESCE(x.events,0) events,COALESCE(x.favorites,0) favorites,COALESCE(x.ratings,0) ratings,COALESCE(x.reviews,0) reviews FROM (SELECT UTC_DATE()-INTERVAL seq DAY day FROM (SELECT 0 seq UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11 UNION ALL SELECT 12 UNION ALL SELECT 13 UNION ALL SELECT 14 UNION ALL SELECT 15 UNION ALL SELECT 16 UNION ALL SELECT 17 UNION ALL SELECT 18 UNION ALL SELECT 19 UNION ALL SELECT 20 UNION ALL SELECT 21 UNION ALL SELECT 22 UNION ALL SELECT 23 UNION ALL SELECT 24 UNION ALL SELECT 25 UNION ALL SELECT 26 UNION ALL SELECT 27 UNION ALL SELECT 28 UNION ALL SELECT 29) n) d LEFT JOIN (SELECT DATE(created_at) date,COUNT(*) events,SUM(is_favorite=TRUE) favorites,SUM(rating IS NOT NULL) ratings,SUM(has_review=TRUE) reviews FROM user_media_events WHERE created_at>=UTC_DATE()-INTERVAL 29 DAY GROUP BY DATE(created_at)) x ON x.date=d.day ORDER BY d.day",
+    ),
+    db.query(
+      "SELECT ev.media_type mediaType,ev.tmdb_id tmdbId,e.title,e.poster_url posterUrl,COUNT(*) events,SUM(ev.is_favorite=TRUE) favorites,SUM(ev.rating IS NOT NULL) ratings FROM user_media_events ev JOIN user_media_entries e ON e.media_type=ev.media_type AND e.tmdb_id=ev.tmdb_id WHERE ev.created_at>=UTC_TIMESTAMP()-INTERVAL 30 DAY GROUP BY ev.media_type,ev.tmdb_id,e.title,e.poster_url ORDER BY events DESC LIMIT 10",
+    ),
+  ]);
+  const normalizedTitles = titles.rows.map((row) => ({
+    ...row,
+    genres: parseJson(row.genres_json) || [],
+  }));
   return {
     filters: {
       mediaType,
       language,
       genre,
+      yearFrom: yearFrom || null,
+      yearTo: yearTo || null,
       minRating: Number.isFinite(minRating) ? minRating : null,
       maxRating: Number.isFinite(maxRating) ? maxRating : null,
       sort,
       limit,
     },
     summary: summary.rows[0],
-    titles: titles.rows.map((row) => ({
-      ...row,
-      genres: parseJson(row.genres_json) || [],
-    })),
+    titles: normalizedTitles,
     dimensions: {
       mediaTypes: mediaTypes.rows,
       languages: languages.rows,
       ratings: ratings.rows,
       statuses: statuses.rows,
       genres: genres.rows,
+      years: years.rows,
+      countries: countries.rows,
+    },
+    trend: trend.rows,
+    topTrend: topTrend.rows,
+    rankings: {
+      popular: normalizedTitles.slice(0, 10),
+      favorites: [...normalizedTitles]
+        .sort((a, b) => Number(b.favorites) - Number(a.favorites))
+        .slice(0, 10),
+      watching: [...normalizedTitles]
+        .sort((a, b) => Number(b.watchingCount) - Number(a.watchingCount))
+        .slice(0, 10),
+      rated: [...normalizedTitles]
+        .sort(
+          (a, b) => Number(b.averageRating || 0) - Number(a.averageRating || 0),
+        )
+        .slice(0, 10),
     },
     definitions: {
       searchTypes:
-        "来自 user_search_history.search_type，记录用户搜索时选择的全部、电影、剧集、影人等范围。",
+        "来自 user_search_history.search_type，记录搜索时选择的全部、电影、剧集或影人范围。",
       mediaStatuses:
-        "来自 user_media_entries.watch_status，表示用户对具体影视设置的想看、在看、看过；无观影状态表示该记录只有收藏、评分或短评。",
+        "来自 user_media_entries.watch_status，表示用户对具体影视设置的想看、在看和看过；无观影状态表示只有收藏、评分或短评。",
     },
   };
 }
-
 export async function adminUsers(params = {}) {
   const db = await getDatabase(),
     page = integer(params.page, 1, 1),

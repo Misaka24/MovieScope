@@ -40,6 +40,8 @@ const mediaAnalyticsFilters = reactive({
   mediaType: "",
   language: "",
   genre: "",
+  yearFrom: "",
+  yearTo: "",
   minRating: "",
   maxRating: "",
   sort: "records",
@@ -75,6 +77,7 @@ const selectedUsers = ref<number[]>([]),
 const nav = [
   ["overview", "总览", "dashboard", "dashboard.view"],
   ["analytics", "统计分析", "analytics", "analytics.view"],
+  ["media-data", "影视数据", "movie_info", "analytics.view"],
   ["users", "用户管理", "group", "users.view"],
   ["groups", "分组与权限", "admin_panel_settings", "users.permissions"],
   ["reviews", "内容审核", "rate_review", "reviews.view"],
@@ -119,12 +122,10 @@ async function safe(task: () => Promise<void>) {
 }
 async function loadTab(name = tab.value) {
   if (name === "overview") overview.value = await adminApi.overview();
-  else if (name === "analytics") {
-    [analytics.value, mediaAnalytics.value] = await Promise.all([
-      adminApi.analytics(),
-      adminApi.mediaAnalytics(mediaAnalyticsFilters),
-    ]);
-  } else if (name === "users") users.value = await adminApi.users(userFilters);
+  else if (name === "analytics") analytics.value = await adminApi.analytics();
+  else if (name === "media-data")
+    mediaAnalytics.value = await adminApi.mediaAnalytics(mediaAnalyticsFilters);
+  else if (name === "users") users.value = await adminApi.users(userFilters);
   else if (name === "groups") groups.value = await adminApi.groups();
   else if (name === "reviews")
     reviews.value = await adminApi.reviews(reviewFilters);
@@ -434,6 +435,35 @@ const totalRegistrations = computed(() =>
 );
 const breakdownTotal = (items: any[]) =>
   (items || []).reduce((sum, item) => sum + Number(item.count || 0), 0);
+const maxMediaTrend = computed(() =>
+  Math.max(
+    1,
+    ...(mediaAnalytics.value.trend || []).map(
+      (item: any) => Number(item.events) || 0,
+    ),
+  ),
+);
+const pieGradient = (items: any[] = []) => {
+  const colors = [
+    "#f5c518",
+    "#60a5fa",
+    "#34d399",
+    "#f97316",
+    "#a78bfa",
+    "#ec4899",
+    "#64748b",
+  ];
+  const total = breakdownTotal(items);
+  let cursor = 0;
+  const stops = items.slice(0, 7).map((item: any, index: number) => {
+    const start = cursor;
+    cursor += total ? (Number(item.count) / total) * 100 : 0;
+    return colors[index] + " " + start + "% " + cursor + "%";
+  });
+  return {
+    background: total ? "conic-gradient(" + stops.join(",") + ")" : "#30333a",
+  };
+};
 const avatarFallback =
   "data:image/svg+xml;charset=UTF-8," +
   encodeURIComponent(
@@ -807,16 +837,18 @@ onMounted(initial);
                 </div>
               </article>
             </div>
-            <section class="media-analytics-workbench">
-              <div class="section-heading compact">
+          </template>
+          <template v-else-if="tab === 'media-data'">
+            <section class="media-data-page">
+              <div class="section-heading">
                 <div>
-                  <h2>影视数据分析工作台</h2>
+                  <h2>影视数据中心</h2>
                   <p>
-                    每一项统计都可下钻到具体电影或剧集，并按类型、语言、类型标签、用户评分和榜单指标重新生成。
+                    围绕每一部电影和剧集，分析用户评价、评分、收藏、想看、在看、看过及其变化趋势。
                   </p>
                 </div>
                 <button class="primary-button" @click="loadMediaAnalytics">
-                  生成统计
+                  应用条件并生成
                 </button>
               </div>
               <div class="filter-bar analytics-filters">
@@ -827,19 +859,6 @@ onMounted(initial);
                   <option value="">全部影视</option>
                   <option value="movie">电影</option>
                   <option value="tv">剧集</option>
-                </select>
-                <select
-                  v-model="mediaAnalyticsFilters.language"
-                  class="admin-input"
-                >
-                  <option value="">全部语言</option>
-                  <option
-                    v-for="item in mediaAnalytics.dimensions?.languages || []"
-                    :key="item.label"
-                    :value="item.label"
-                  >
-                    {{ item.label === "unknown" ? "未知语言" : item.label }}
-                  </option>
                 </select>
                 <select
                   v-model="mediaAnalyticsFilters.genre"
@@ -854,36 +873,65 @@ onMounted(initial);
                     {{ item.label }}
                   </option>
                 </select>
+                <select
+                  v-model="mediaAnalyticsFilters.language"
+                  class="admin-input"
+                >
+                  <option value="">全部语言</option>
+                  <option
+                    v-for="item in mediaAnalytics.dimensions?.languages || []"
+                    :key="item.label"
+                    :value="item.label"
+                  >
+                    {{ item.label === "unknown" ? "未知语言" : item.label }}
+                  </option>
+                </select>
+                <input
+                  v-model="mediaAnalyticsFilters.yearFrom"
+                  class="admin-input"
+                  type="number"
+                  min="1880"
+                  max="2100"
+                  placeholder="起始年份"
+                />
+                <input
+                  v-model="mediaAnalyticsFilters.yearTo"
+                  class="admin-input"
+                  type="number"
+                  min="1880"
+                  max="2100"
+                  placeholder="结束年份"
+                />
                 <input
                   v-model="mediaAnalyticsFilters.minRating"
+                  class="admin-input"
                   type="number"
                   min="0.5"
                   max="10"
                   step="0.5"
-                  class="admin-input"
                   placeholder="最低用户评分"
                 />
                 <input
                   v-model="mediaAnalyticsFilters.maxRating"
+                  class="admin-input"
                   type="number"
                   min="0.5"
                   max="10"
                   step="0.5"
-                  class="admin-input"
                   placeholder="最高用户评分"
                 />
                 <select
                   v-model="mediaAnalyticsFilters.sort"
                   class="admin-input"
                 >
-                  <option value="records">记录总数榜</option>
-                  <option value="users">参与用户榜</option>
+                  <option value="records">综合参与榜</option>
                   <option value="favorites">收藏榜</option>
+                  <option value="want">想看榜</option>
                   <option value="watching">在看榜</option>
                   <option value="watched">看过榜</option>
-                  <option value="ratings">评价数量榜</option>
+                  <option value="ratings">评分人数榜</option>
                   <option value="score">用户均分榜</option>
-                  <option value="reviews">短评数量榜</option>
+                  <option value="reviews">评价数量榜</option>
                 </select>
               </div>
               <div class="analytics-summary-grid">
@@ -891,7 +939,9 @@ onMounted(initial);
                   v-for="item in [
                     ['影视作品', mediaAnalytics.summary?.titles],
                     ['参与用户', mediaAnalytics.summary?.users],
-                    ['行为记录', mediaAnalytics.summary?.records],
+                    ['想看', mediaAnalytics.summary?.wantCount],
+                    ['在看', mediaAnalytics.summary?.watchingCount],
+                    ['看过', mediaAnalytics.summary?.watchedCount],
                     ['收藏', mediaAnalytics.summary?.favorites],
                     ['评分', mediaAnalytics.summary?.ratings],
                     ['短评', mediaAnalytics.summary?.reviews],
@@ -902,28 +952,119 @@ onMounted(initial);
                   ><b>{{ formatNumber(item[1]) }}</b>
                 </article>
               </div>
-              <div class="analytics-dimension-grid">
+              <div class="media-overview-grid">
+                <article class="admin-panel media-trend-panel">
+                  <div class="panel-title-row">
+                    <div>
+                      <h3>全站影视行为趋势</h3>
+                      <p>
+                        最近 30
+                        天产生的影视操作，后续每次想看、在看、收藏、评分和短评都会形成趋势点。
+                      </p>
+                    </div>
+                  </div>
+                  <div class="media-trend-chart">
+                    <div
+                      v-for="item in mediaAnalytics.trend || []"
+                      :key="item.date"
+                      :title="String(item.date) + ' · ' + String(item.events) + ' 次操作'"
+                    >
+                      <i
+                        :style="{
+                          height:
+                            Math.max(
+                              4,
+                              (Number(item.events) / maxMediaTrend) * 130,
+                            ) + 'px',
+                        }"
+                      ></i
+                      ><small>{{ new Date(item.date).getDate() }}</small>
+                    </div>
+                  </div>
+                </article>
+                <article class="admin-panel pie-panel">
+                  <h3>电影与剧集占比</h3>
+                  <div class="pie-layout">
+                    <i
+                      class="pie-chart"
+                      :style="
+                        pieGradient(mediaAnalytics.dimensions?.mediaTypes)
+                      "
+                    ></i>
+                    <div>
+                      <p
+                        v-for="item in mediaAnalytics.dimensions?.mediaTypes ||
+                        []"
+                        :key="item.label"
+                      >
+                        <b>{{ item.label === "movie" ? "电影" : "剧集" }}</b
+                        ><span
+                          >{{ formatNumber(item.count) }} ·
+                          {{
+                            percent(
+                              item.count,
+                              breakdownTotal(
+                                mediaAnalytics.dimensions?.mediaTypes,
+                              ),
+                            )
+                          }}%</span
+                        >
+                      </p>
+                    </div>
+                  </div>
+                </article>
+                <article class="admin-panel pie-panel">
+                  <h3>观影状态占比</h3>
+                  <div class="pie-layout">
+                    <i
+                      class="pie-chart"
+                      :style="pieGradient(mediaAnalytics.dimensions?.statuses)"
+                    ></i>
+                    <div>
+                      <p
+                        v-for="item in mediaAnalytics.dimensions?.statuses ||
+                        []"
+                        :key="item.label"
+                      >
+                        <b>{{ item.label }}</b
+                        ><span
+                          >{{ formatNumber(item.count) }} ·
+                          {{
+                            percent(
+                              item.count,
+                              breakdownTotal(
+                                mediaAnalytics.dimensions?.statuses,
+                              ),
+                            )
+                          }}%</span
+                        >
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <div class="analytics-dimension-grid rich">
                 <article
                   v-for="group in [
                     {
-                      title: '影视类型',
-                      items: mediaAnalytics.dimensions?.mediaTypes,
+                      title: '类型关系与占比',
+                      items: mediaAnalytics.dimensions?.genres,
                     },
                     {
-                      title: '语言分布',
-                      items: mediaAnalytics.dimensions?.languages,
+                      title: '年份分布',
+                      items: mediaAnalytics.dimensions?.years,
                     },
                     {
                       title: '评分区间',
                       items: mediaAnalytics.dimensions?.ratings,
                     },
                     {
-                      title: '观影状态',
-                      items: mediaAnalytics.dimensions?.statuses,
+                      title: '语言分布',
+                      items: mediaAnalytics.dimensions?.languages,
                     },
                     {
-                      title: '类型标签',
-                      items: mediaAnalytics.dimensions?.genres,
+                      title: '国家/地区',
+                      items: mediaAnalytics.dimensions?.countries,
                     },
                   ]"
                   :key="group.title"
@@ -931,16 +1072,12 @@ onMounted(initial);
                 >
                   <h3>{{ group.title }}</h3>
                   <div
-                    v-for="item in (group.items || []).slice(0, 10)"
+                    v-for="item in (group.items || []).slice(0, 12)"
                     :key="item.label"
                     class="dimension-bar"
                   >
                     <span>{{
-                      item.label === "movie"
-                        ? "电影"
-                        : item.label === "tv"
-                          ? "剧集"
-                          : item.label
+                      item.label === "unknown" ? "未知" : item.label
                     }}</span
                     ><i
                       ><b
@@ -961,22 +1098,72 @@ onMounted(initial);
                   </div>
                 </article>
               </div>
+              <div class="ranking-grid">
+                <article
+                  v-for="ranking in [
+                    {
+                      title: '综合参与排行',
+                      items: mediaAnalytics.rankings?.popular,
+                      key: 'records',
+                    },
+                    {
+                      title: '收藏排行',
+                      items: mediaAnalytics.rankings?.favorites,
+                      key: 'favorites',
+                    },
+                    {
+                      title: '正在看排行',
+                      items: mediaAnalytics.rankings?.watching,
+                      key: 'watchingCount',
+                    },
+                    {
+                      title: '用户高分排行',
+                      items: mediaAnalytics.rankings?.rated,
+                      key: 'averageRating',
+                    },
+                  ]"
+                  :key="ranking.title"
+                  class="admin-panel"
+                >
+                  <h3>{{ ranking.title }}</h3>
+                  <RouterLink
+                    v-for="(item, index) in ranking.items || []"
+                    :key="item.media_type + item.tmdb_id"
+                    :to="{
+                      name: 'title',
+                      params: { type: item.media_type, id: item.tmdb_id },
+                    }"
+                    class="media-rank-row"
+                    ><em>{{ Number(index) + 1 }}</em
+                    ><img :src="item.poster_url || avatarFallback" /><span
+                      ><b>{{ item.title }}</b
+                      ><small
+                        >{{ item.release_year || "年份未知" }} ·
+                        {{
+                          (item.genres || []).slice(0, 2).join(" / ") ||
+                          "类型未记录"
+                        }}</small
+                      ></span
+                    ><strong>{{ item[ranking.key] || 0 }}</strong></RouterLink
+                  >
+                </article>
+              </div>
               <article class="admin-panel media-ranking-panel">
                 <div class="panel-title-row">
                   <div>
-                    <h3>具体影视统计与排行榜</h3>
+                    <h3>具体影视数据明细</h3>
                     <p>
-                      点击片名进入对应影视详情；切换排序即可生成收藏榜、在看榜、评分榜等表单。
+                      每行只代表一部具体影视，可直接查看其评价、评分、收藏和各类观影状态。
                     </p>
                   </div>
-                  <b>{{ formatNumber(mediaAnalytics.titles?.length) }} 条</b>
+                  <b>{{ formatNumber(mediaAnalytics.titles?.length) }} 部</b>
                 </div>
                 <div class="table-wrap">
                   <table class="admin-table media-analytics-table">
                     <thead>
                       <tr>
                         <th>影视</th>
-                        <th>类型 / 年份</th>
+                        <th>类型/年份</th>
                         <th>用户</th>
                         <th>想看</th>
                         <th>在看</th>
@@ -1040,15 +1227,6 @@ onMounted(initial);
                   </table>
                 </div>
               </article>
-              <div class="definition-grid">
-                <p>
-                  <b>搜索类型：</b>{{ mediaAnalytics.definitions?.searchTypes }}
-                </p>
-                <p>
-                  <b>影视状态分布：</b
-                  >{{ mediaAnalytics.definitions?.mediaStatuses }}
-                </p>
-              </div>
             </section>
           </template>
           <template v-else-if="tab === 'users'"
@@ -2398,6 +2576,119 @@ onMounted(initial);
   border-radius: 9px;
   background: #1d2025;
 }
+.media-data-page {
+  min-width: 0;
+}
+.media-overview-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+.media-trend-chart {
+  display: flex;
+  height: 175px;
+  align-items: flex-end;
+  gap: 5px;
+  margin-top: 14px;
+}
+.media-trend-chart > div {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.media-trend-chart i {
+  display: block;
+  width: 72%;
+  max-width: 12px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(#ffe36c, #f5c518);
+}
+.media-trend-chart small {
+  color: #686c75;
+  font-size: 8px;
+}
+.pie-layout {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+}
+.pie-chart {
+  display: block;
+  width: 112px;
+  height: 112px;
+  border: 12px solid #1d2025;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #ffffff0d;
+}
+.pie-layout p {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid #ffffff0a;
+  padding: 6px 0;
+  font-size: 10px;
+}
+.pie-layout p span {
+  color: #858993;
+}
+.analytics-dimension-grid.rich {
+  grid-template-columns: repeat(5, 1fr);
+  margin-top: 12px;
+}
+.ranking-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+.media-rank-row {
+  display: grid;
+  grid-template-columns: 20px 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #ffffff0a;
+  padding: 8px 0;
+}
+.media-rank-row em {
+  color: #f5c518;
+  font-style: normal;
+  font-weight: 800;
+}
+.media-rank-row img {
+  width: 32px;
+  height: 45px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+.media-rank-row span,
+.media-rank-row b,
+.media-rank-row small {
+  display: block;
+  min-width: 0;
+}
+.media-rank-row b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.media-rank-row small {
+  overflow: hidden;
+  color: #737781;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media-rank-row > strong {
+  color: #f5c518;
+  font-size: 12px;
+}
 .analytics-summary-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -3362,6 +3653,18 @@ onMounted(initial);
   .analytics-dimension-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  .media-overview-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .media-trend-panel {
+    grid-column: 1/-1;
+  }
+  .analytics-dimension-grid.rich {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .ranking-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 @media (max-width: 800px) {
   .admin-shell {
@@ -3406,6 +3709,14 @@ onMounted(initial);
   .analytics-dimension-grid,
   .definition-grid {
     grid-template-columns: 1fr;
+  }
+  .media-overview-grid,
+  .analytics-dimension-grid.rich,
+  .ranking-grid {
+    grid-template-columns: 1fr;
+  }
+  .media-trend-panel {
+    grid-column: auto;
   }
 }
 </style>

@@ -325,6 +325,19 @@ export async function upsertMediaEntry(userId, input) {
       watchedAt,
     ],
   );
+  await db.query(
+    "INSERT INTO user_media_events(user_id,media_type,tmdb_id,event_type,watch_status,is_favorite,rating,has_review) VALUES(?,?,?,?,?,?,?,?)",
+    [
+      userId,
+      mediaType,
+      tmdbId,
+      "interaction",
+      watchStatus,
+      Boolean(input.favorite),
+      rating,
+      Boolean(reviewText),
+    ],
+  );
   return getMediaEntry(userId, mediaType, tmdbId);
 }
 export async function getMediaEntry(userId, mediaType, tmdbId) {

@@ -46,7 +46,6 @@ import {
   adminGroups,
   adminLogs,
   adminMediaAnalytics,
-  adminMediaAnalytics,
   adminModerate,
   adminOverview,
   adminProviders,
@@ -384,14 +383,6 @@ const server = createServer(async (request, response) => {
     ) {
       await requirePermission(request, "analytics.view");
       success(response, await adminAnalytics());
-      return;
-    }
-    if (
-      request.method === "GET" &&
-      url.pathname === "/api/v1/admin/analytics/media"
-    ) {
-      await requirePermission(request, "analytics.view");
-      success(response, await adminMediaAnalytics(queryParams(url)));
       return;
     }
     if (
