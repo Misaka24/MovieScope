@@ -1,0 +1,112 @@
+name: Deploy MovieScope
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: moviescope-production
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/moviescope-web
+  API_IMAGE: ghcr.io/${{ github.repository_owner }}/moviescope-api
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: node --test server/home-service.test.mjs server/user-service.test.mjs server/admin-service.test.mjs
+
+  images:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: web
+            dockerfile: Dockerfile.web
+            image: moviescope-web
+          - name: api
+            dockerfile: Dockerfile.api
+            image: moviescope-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  deploy:
+    needs: images
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare deployment bundle
+        run: |
+          mkdir -p bundle/deploy
+          cp docker-compose.prod.yml bundle/
+          cp deploy/deploy.sh deploy/backup-mysql.sh bundle/deploy/
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${SSH_PORT:-22}" -H "$SSH_HOST" >> ~/.ssh/known_hosts
+      - name: Upload deployment files
+        env:
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -p "${SSH_PORT:-22}" "$SSH_USER@$SSH_HOST" "mkdir -p '$DEPLOY_PATH/deploy' '$DEPLOY_PATH/backups'"
+          scp -P "${SSH_PORT:-22}" bundle/docker-compose.prod.yml "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/docker-compose.prod.yml"
+          scp -P "${SSH_PORT:-22}" bundle/deploy/*.sh "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/deploy/"
+      - name: Backup and deploy
+        env:
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ssh -p "${SSH_PORT:-22}" "$SSH_USER@$SSH_HOST" "cd '$DEPLOY_PATH' && chmod +x deploy/*.sh && printf '%s' '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin && if docker compose --env-file .env.production -f docker-compose.prod.yml ps mysql --status running --quiet | grep -q .; then ./deploy/backup-mysql.sh; fi && ./deploy/deploy.sh"

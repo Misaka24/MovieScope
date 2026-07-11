@@ -69,6 +69,7 @@ import { getSettingValue } from "./runtime-config.mjs";
 
 loadEnv();
 const port = Number(process.env.API_PORT || 8787),
+  host = process.env.API_HOST || "127.0.0.1",
   allowedOrigin = process.env.WEB_ORIGIN || "http://127.0.0.1:5173",
   cookieName = "moviescope_session";
 function sendJson(response, statusCode, body, headers = {}) {
@@ -767,8 +768,8 @@ server.on("error", (error) => {
 });
 try {
   await getDatabase();
-  server.listen(port, "127.0.0.1", () =>
-    console.log(`MovieScope API: http://127.0.0.1:${port}`),
+  server.listen(port, host, () =>
+    console.log(`MovieScope API: http://${host}:${port}`),
   );
 } catch (error) {
   console.error("MovieScope API 启动失败。");

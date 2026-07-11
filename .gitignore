@@ -5,6 +5,8 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.production.example
+backups/
 .data/
 *.log
 api-cache-export.json
