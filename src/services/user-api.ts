@@ -1,3 +1,5 @@
+import { apiRequest, buildQuery } from './api-client'
+
 export interface SessionUser {
   id: number;
   username: string;
@@ -44,30 +46,8 @@ export interface ProfileData {
     search: Array<Record<string, unknown>>;
   };
 }
-interface ApiEnvelope<T> {
-  data: T | null;
-  error: { code: string; message: string } | null;
-}
-export async function userRequest<T>(path: string, options: RequestInit = {}) {
-  const response = await fetch(path, {
-    ...options,
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...options.headers,
-    },
-  });
-  const text = await response.text();
-  let body: ApiEnvelope<T>;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    throw new Error("服务器返回的数据格式无效");
-  }
-  if (!response.ok || body.data == null)
-    throw new Error(body.error?.message || "请求失败");
-  return body.data;
+export function userRequest<T>(path: string, options: RequestInit = {}) {
+  return apiRequest<T>(path, { ...options, credentials: "include" });
 }
 export const authApi = {
   me: () => userRequest<{ user: SessionUser | null }>("/api/v1/auth/me"),

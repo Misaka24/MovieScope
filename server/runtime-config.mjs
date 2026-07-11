@@ -1,4 +1,33 @@
 import { getDatabase } from './database.mjs'
-function parseJson(value){if(value==null||typeof value==='object')return value;try{return JSON.parse(value)}catch{return value}}
-export async function getProviderRuntime(providerKey,defaults={}){const db=await getDatabase(),result=await db.query('SELECT base_url baseUrl,enabled,request_timeout_ms requestTimeoutMs FROM api_provider_configs WHERE provider_key=? LIMIT 1',[providerKey]),row=result.rows[0];return{baseUrl:row?.baseUrl||defaults.baseUrl,enabled:row?Boolean(row.enabled):true,requestTimeoutMs:Number(row?.requestTimeoutMs||defaults.requestTimeoutMs||process.env.API_TIMEOUT_MS||25000)}}
-export async function getSettingValue(key,fallback=null){const db=await getDatabase(),result=await db.query('SELECT value_json value FROM site_settings WHERE setting_key=? LIMIT 1',[key]);return result.rows[0]?parseJson(result.rows[0].value):fallback}
+
+function parseJson(value) {
+  if (value == null || typeof value === 'object') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return value
+  }
+}
+
+export async function getProviderRuntime(providerKey, defaults = {}) {
+  const db = await getDatabase()
+  const result = await db.query(
+    'SELECT base_url baseUrl, enabled, request_timeout_ms requestTimeoutMs FROM api_provider_configs WHERE provider_key = ? LIMIT 1',
+    [providerKey],
+  )
+  const row = result.rows[0]
+  return {
+    baseUrl: row?.baseUrl || defaults.baseUrl,
+    enabled: row ? Boolean(row.enabled) : true,
+    requestTimeoutMs: Number(row?.requestTimeoutMs || defaults.requestTimeoutMs || process.env.API_TIMEOUT_MS || 25000),
+  }
+}
+
+export async function getSettingValue(key, fallback = null) {
+  const db = await getDatabase()
+  const result = await db.query(
+    'SELECT value_json value FROM site_settings WHERE setting_key = ? LIMIT 1',
+    [key],
+  )
+  return result.rows[0] ? parseJson(result.rows[0].value) : fallback
+}

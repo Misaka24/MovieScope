@@ -9,6 +9,8 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "vue-tsc -b",
+    "test": "node --test server/*.test.mjs",
+    "check": "npm run typecheck && npm test && npm run build",
     "api": "node server/server.mjs",
     "dev:all": "node scripts/dev.mjs",
     "cache:inspect": "node scripts/inspect-cache.mjs",

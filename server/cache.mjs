@@ -1,5 +1,7 @@
 import { getDatabase } from './database.mjs'
 
+const pendingLoads = new Map()
+
 function parsePayload(value) {
   if (typeof value === 'string') return JSON.parse(value)
   return value
@@ -55,10 +57,7 @@ export async function logProviderSync({ provider, operation, cacheKey, status, d
   )
 }
 
-export async function cachedSql({ cacheKey, provider, operation, ttlMs, loader }) {
-  const cached = await getCachedValue(cacheKey)
-  if (cached) return { value: cached.payload, cache: 'hit', fetchedAt: cached.fetched_at }
-
+async function loadAndCache({ cacheKey, provider, operation, ttlMs, loader }) {
   const startedAt = performance.now()
   try {
     const value = await loader()
@@ -71,4 +70,16 @@ export async function cachedSql({ cacheKey, provider, operation, ttlMs, loader }
     if (stale) return { value: stale.payload, cache: 'stale', fetchedAt: stale.fetched_at }
     throw error
   }
+}
+
+export async function cachedSql(options) {
+  const cached = await getCachedValue(options.cacheKey)
+  if (cached) return { value: cached.payload, cache: 'hit', fetchedAt: cached.fetched_at }
+
+  const pending = pendingLoads.get(options.cacheKey)
+  if (pending) return pending
+
+  const loading = loadAndCache(options).finally(() => pendingLoads.delete(options.cacheKey))
+  pendingLoads.set(options.cacheKey, loading)
+  return loading
 }
