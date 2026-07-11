@@ -13,7 +13,8 @@
     "dev:all": "node scripts/dev.mjs",
     "cache:inspect": "node scripts/inspect-cache.mjs",
     "cache:export": "node scripts/export-cache.mjs",
-    "admin:promote": "node scripts/promote-admin.mjs"
+    "admin:promote": "node scripts/promote-admin.mjs",
+    "data:seed-realistic": "node scripts/seed-realistic-data.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.6",
