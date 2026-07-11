@@ -94,12 +94,11 @@ export async function justOne(path, params = {}, ttlMs = 30 * 60 * 1000) {
   url.searchParams.set("token", token);
   appendParams(url, params);
   const cacheKey = `justone:${path}:${JSON.stringify(params)}`;
-  const effectiveTtlMs = Math.max(ttlMs, 90 * 24 * 60 * 60 * 1000);
   const result = await cachedSql({
     cacheKey,
     provider: "imdb",
     operation: path,
-    ttlMs: effectiveTtlMs,
+    ttlMs,
     loader: async () => {
       let lastResponse;
       for (let attempt = 0; attempt < 1; attempt += 1) {

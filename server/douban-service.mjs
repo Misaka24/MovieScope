@@ -1,5 +1,6 @@
 import { getDatabase } from "./database.mjs";
 import { justOne } from "./providers.mjs";
+import { CACHE_TTL, titleDataTtlMs } from "./cache-policy.mjs";
 
 const mappingTtlMs = 180 * 24 * 60 * 60 * 1000;
 const retryTtlMs = 7 * 24 * 60 * 60 * 1000;
@@ -126,6 +127,7 @@ export async function resolveDoubanSubject({
   title,
   originalTitle,
   year,
+  releaseDate,
 }) {
   if (!imdbId) return null;
   const db = await getDatabase();
@@ -151,7 +153,7 @@ export async function resolveDoubanSubject({
       const detail = await justOne(
         "/api/douban/get-subject-detail/v1",
         { subjectId: candidate.id },
-        180 * 24 * 60 * 60 * 1000,
+        titleDataTtlMs(releaseDate || (year ? `${year}-01-01` : null)),
       );
       if (detail?.imdb === imdbId) {
         await saveMapping({
@@ -186,14 +188,12 @@ export async function resolveDoubanSubject({
 }
 
 const ratingValues = { 力荐: 10, 推荐: 8, 还行: 6, 较差: 4, 很差: 2 };
-async function loadPages(path, subjectId, sort, pages) {
+async function loadPages(path, subjectId, sort, pages, ttlMs) {
   const responses = await Promise.all(
     Array.from({ length: pages }, (_, index) =>
-      justOne(
-        path,
-        { subjectId, sort, page: index + 1 },
-        90 * 24 * 60 * 60 * 1000,
-      ).catch(() => null),
+      justOne(path, { subjectId, sort, page: index + 1 }, ttlMs).catch(
+        () => null,
+      ),
     ),
   );
   return responses.filter(Boolean);
@@ -203,7 +203,7 @@ async function enrichReview(review) {
     const detail = await justOne(
       "/api/douban/get-movie-review-detail/v1",
       { reviewId: String(review.cid) },
-      10 * 365 * 24 * 60 * 60 * 1000,
+      CACHE_TTL.immutableReview,
     );
     return {
       ...review,
@@ -221,7 +221,7 @@ export async function getDoubanReviewDetail(reviewId) {
   const detail = await justOne(
     "/api/douban/get-movie-review-detail/v1",
     { reviewId: id },
-    10 * 365 * 24 * 60 * 60 * 1000,
+    CACHE_TTL.immutableReview,
   );
   return {
     id,
@@ -237,25 +237,15 @@ export async function getDoubanBundle(identity, options = {}) {
     1,
     Math.min(5, Number(options.pages || process.env.DOUBAN_SYNC_PAGES || 3)),
   );
-  const [commentPages, reviewPages] = await Promise.all([
-    loadPages(
-      "/api/douban/get-movie-comments/v1",
-      identity.doubanId,
-      "hot",
-      pages,
-    ),
-    loadPages(
+  const ttlMs = Number(options.ttlMs || CACHE_TTL.sixtyDays);
+  const reviewPages = await loadPages(
       "/api/douban/get-movie-reviews/v1",
       identity.doubanId,
       "hot",
       pages,
-    ),
-  ]);
-  const comments = commentPages.flatMap((page) => page.comments || []);
+      ttlMs,
+    );
   const reviewList = reviewPages.flatMap((page) => page.reviews || []);
-  const uniqueComments = [
-    ...new Map(comments.map((item) => [String(item.cid), item])).values(),
-  ];
   const uniqueReviews = [
     ...new Map(reviewList.map((item) => [String(item.cid), item])).values(),
   ];
@@ -274,7 +264,8 @@ export async function getDoubanBundle(identity, options = {}) {
     subjectId: identity.doubanId,
     url: `https://movie.douban.com/subject/${identity.doubanId}/`,
     detail: identity.detail,
-    comments: uniqueComments.slice(0, 0).map((item) => ({
+    comments: [],
+    legacyComments: [], /* deprecated: short comments are intentionally not fetched */ /*
       id: String(item.cid),
       platform: "豆瓣",
       kind: "comment",
@@ -294,7 +285,7 @@ export async function getDoubanBundle(identity, options = {}) {
       replyCount: null,
       helpfulness: null,
       hotScore: Number(item.vote_count || 0),
-    })),
+    })), */
     reviews: fullReviews.map((item) => ({
       id: String(item.cid),
       platform: "豆瓣",

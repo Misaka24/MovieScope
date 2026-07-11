@@ -5,6 +5,7 @@ import {
   imdbVoteCountValue,
 } from "./imdb-rating.mjs";
 import { getDoubanBundle, resolveDoubanSubject } from "./douban-service.mjs";
+import { CACHE_TTL, titleDataTtlMs } from "./cache-policy.mjs";
 
 const imageFallback =
   "https://placehold.co/600x900/1e2024/e2e2e8?text=MovieScope";
@@ -99,13 +100,13 @@ async function loadGenres() {
   return { movie: movie.genres || [], tv: tv.genres || [] };
 }
 
-async function imdbDetails(imdbId) {
+async function imdbDetails(imdbId, releaseDate = null) {
   if (!imdbId) return null;
   try {
     return await justOne(
       "/api/imdb/title-redux-overview-query/v1",
       { id: imdbId, languageCountry: "en_US" },
-      180 * 24 * 60 * 60 * 1000,
+      titleDataTtlMs(releaseDate),
     );
   } catch {
     return null;
@@ -131,7 +132,17 @@ async function imdbRatingsFor(items) {
   const ids = [
     ...new Set(resolved.map(({ imdbId }) => imdbId).filter(Boolean)),
   ];
-  const loaded = await Promise.all(ids.map(imdbDetails));
+  const releaseDateById = new Map(
+    resolved
+      .filter(({ imdbId }) => imdbId)
+      .map(({ imdbId, item }) => [
+        imdbId,
+        item.releaseDate || (item.year ? `${item.year}-01-01` : null),
+      ]),
+  );
+  const loaded = await Promise.all(
+    ids.map((imdbId) => imdbDetails(imdbId, releaseDateById.get(imdbId))),
+  );
   const byId = new Map(
     loaded
       .map((value, index) => [ids[index], value])
@@ -406,7 +417,10 @@ export async function getTitleDetails(mediaType, id) {
         7 * 24 * 60 * 60 * 1000,
       ).catch(() => null);
   const external = details.external_ids || {};
-  const imdb = await imdbDetails(external.imdb_id);
+  const imdb = await imdbDetails(
+    external.imdb_id,
+    details.release_date || details.first_air_date,
+  );
   const releaseDates =
     mediaType === "movie"
       ? details.release_dates?.results || []
@@ -595,6 +609,9 @@ export async function getExternalTitleReviews(mediaType, id) {
       doubanRating: null,
     };
   const params = { id: imdbId, languageCountry: "en_US" };
+  const titleTtlMs = titleDataTtlMs(
+    details.release_date || details.first_air_date,
+  );
   const doubanIdentityPromise = resolveDoubanSubject({
     imdbId,
     mediaType,
@@ -602,38 +619,33 @@ export async function getExternalTitleReviews(mediaType, id) {
     title: details.title || details.name,
     originalTitle: details.original_title || details.original_name,
     year: year(details.release_date || details.first_air_date),
+    releaseDate: details.release_date || details.first_air_date || null,
   });
   const [
     criticsResult,
     usersResult,
     awardsResult,
     triviaResult,
+    boxOfficeResult,
     doubanIdentity,
   ] = await Promise.all([
     safeJustOne(
       "/api/imdb/title-critics-review-summary-query/v1",
       params,
-      90 * 24 * 60 * 60 * 1000,
+      titleTtlMs,
     ),
     safeJustOne(
       "/api/imdb/title-user-reviews-summary-query/v1",
       params,
-      30 * 24 * 60 * 60 * 1000,
+      titleTtlMs,
     ),
-    safeJustOne(
-      "/api/imdb/title-awards-summary-query/v1",
-      params,
-      180 * 24 * 60 * 60 * 1000,
-    ),
-    safeJustOne(
-      "/api/imdb/title-did-you-know-query/v1",
-      params,
-      180 * 24 * 60 * 60 * 1000,
-    ),
+    safeJustOne("/api/imdb/title-awards-summary-query/v1", params, titleTtlMs),
+    safeJustOne("/api/imdb/title-did-you-know-query/v1", params, titleTtlMs),
+    safeJustOne("/api/imdb/title-box-office-summary/v1", params, titleTtlMs),
     doubanIdentityPromise,
   ]);
   const doubanBundle = doubanIdentity
-    ? await getDoubanBundle(doubanIdentity)
+    ? await getDoubanBundle(doubanIdentity, { ttlMs: titleTtlMs })
     : null;
   const metacritic = criticsResult.value?.title?.metacritic;
   const criticReviewItems = [
@@ -668,6 +680,11 @@ export async function getExternalTitleReviews(mediaType, id) {
     usersResult.value?.title?.userReviews?.edges ||
     [];
   const award = awardsResult.value?.title || {};
+  const boxOffice = boxOfficeResult.value?.title || {};
+  const money = (value) =>
+    value?.amount == null
+      ? null
+      : { amount: number(value.amount), currency: value.currency || null };
   return {
     imdbId,
     critics: criticsResult.error
@@ -811,7 +828,22 @@ export async function getExternalTitleReviews(mediaType, id) {
           subjectId: doubanBundle.subjectId,
         }
       : null,
-    boxOffice: { status: "unavailable", data: null },
+    boxOffice: boxOfficeResult.error
+      ? { status: "error", message: boxOfficeResult.error, data: null }
+      : {
+          status: "ready",
+          data: {
+            budget: money(boxOffice.budget?.totalBudget),
+            openingWeekends: (boxOffice.openingWeekendGrosses?.edges || []).map(
+              ({ node }) => ({
+                ...money(node?.gross?.total),
+                date: node?.weekendStartDate || null,
+              }),
+            ),
+            domestic: money(boxOffice.domesticGross?.total),
+            worldwide: money(boxOffice.worldwideGross?.total),
+          },
+        },
     chartRankings: { status: "unavailable", items: [] },
   };
 }
@@ -967,7 +999,7 @@ export async function getPopularBySource(
     mediaType === "movie"
       ? "/api/douban/get-recent-hot-movie/v1"
       : "/api/douban/get-recent-hot-tv/v1";
-  const response = await justOne(path, {}, 365 * 24 * 60 * 60 * 1000);
+  const response = await justOne(path, {}, CACHE_TTL.recentHot);
   const results = (response.items || []).map((item) =>
     doubanHotItem(item, mediaType),
   );
@@ -1046,11 +1078,23 @@ const browsePresets = {
 };
 
 export async function getBrowsePage(preset, pageValue) {
-  if (preset === "imdb-top-250") {
+  const imdbChart = {
+    "imdb-top-250": {
+      type: "TOP_250",
+      title: "IMDb Top 250",
+      description: "IMDb 用户长期评分形成的经典电影榜单",
+    },
+    "imdb-top-250-tv": {
+      type: "TOP_250_TV",
+      title: "IMDb 剧集 Top 250",
+      description: "IMDb 用户长期评分形成的经典剧集榜单",
+    },
+  }[preset];
+  if (imdbChart) {
     const response = await justOne(
       "/api/imdb/title-chart-rankings/v1",
-      { rankingsChartType: "TOP_250", languageCountry: "en_US" },
-      7 * 24 * 60 * 60 * 1000,
+      { rankingsChartType: imdbChart.type, languageCountry: "en_US" },
+      CACHE_TTL.top250,
     );
     const all = (response.titleChartRankings?.edges || []).map(imdbChartItem);
     const page = Math.max(1, Math.min(10, number(pageValue, 1)));
@@ -1085,8 +1129,8 @@ export async function getBrowsePage(preset, pageValue) {
     );
     return {
       preset,
-      title: "IMDb Top 250",
-      description: "IMDb 用户长期评分形成的经典电影榜单",
+      title: imdbChart.title,
+      description: imdbChart.description,
       page,
       totalPages: Math.ceil(all.length / size),
       totalResults: all.length,
@@ -1334,7 +1378,7 @@ export async function getIndustryNews() {
   const response = await justOne(
     "/api/imdb/news-by-category-query/v1",
     { category: "MOVIE", languageCountry: "en_US" },
-    24 * 60 * 60 * 1000,
+    CACHE_TTL.news,
   );
   return (response.news?.edges || []).map((edge) => {
     const node = edge.node || {};
