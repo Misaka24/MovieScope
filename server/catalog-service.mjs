@@ -1,4 +1,5 @@
 import { imdbApiDev, justOne, tmdb } from "./providers.mjs";
+import { imdbRatingValue, imdbTitleId, imdbVoteCountValue } from "./imdb-rating.mjs";
 
 const imageFallback =
   "https://placehold.co/600x900/1e2024/e2e2e8?text=MovieScope";
@@ -138,7 +139,7 @@ async function imdbRatingsFor(items) {
   for (let index = 0; index < ids.length; index += 5)
     batches.push(ids.slice(index, index + 5));
   const titles = (await Promise.all(batches.map(loadImdbBatch))).flat();
-  const byId = new Map(titles.map((title) => [title.id, title]));
+  const byId = new Map(titles.map((title) => [imdbTitleId(title), title]).filter(([id]) => id));
   const missingIds = ids.filter((imdbId) => !byId.has(imdbId));
   const fallback = await Promise.allSettled(
     missingIds.map((imdbId) => imdbDetails(imdbId)),
@@ -152,8 +153,8 @@ async function imdbRatingsFor(items) {
     return {
       ...item,
       imdbId,
-      imdbRating: number(imdb?.rating?.aggregateRating),
-      imdbVoteCount: number(imdb?.rating?.voteCount),
+      imdbRating: imdbRatingValue(imdb),
+      imdbVoteCount: imdbVoteCountValue(imdb),
     };
   });
 }

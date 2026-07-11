@@ -1,4 +1,5 @@
 import { imdbApiDev, justOne, tmdb } from './providers.mjs'
+import { imdbRatingValue, imdbTitleId } from './imdb-rating.mjs'
 
 const imageFallback = 'https://placehold.co/600x900/1e2024/e2e2e8?text=MovieScope'
 const backdropFallback = 'https://placehold.co/1600x900/111317/e2e2e8?text=MovieScope'
@@ -158,7 +159,15 @@ async function loadImdbTitleBatch(titleIds) {
   }
 }
 
-async function enrichImdbRatings(items) {
+async function loadImdbTitle(imdbId) {
+  try {
+    return await imdbApiDev(`/titles/${imdbId}`, {}, 24 * 60 * 60 * 1000)
+  } catch {
+    return null
+  }
+}
+
+async function enrichImdbRatings(items, knownRatings = new Map()) {
   const resolved = await Promise.all(items.map(async (media) => {
     try {
       const external = await tmdb(`/${media.mediaType}/${media.sourceId}/external_ids`, {}, 7 * 24 * 60 * 60 * 1000)
@@ -170,14 +179,20 @@ async function enrichImdbRatings(items) {
   const imdbIds = [...new Set(resolved.map((item) => item.imdbId).filter(Boolean))]
   const responses = await Promise.all(chunks(imdbIds, 5).map(loadImdbTitleBatch))
   const titleById = new Map(
-    responses
-      .flat()
-      .map((title) => [title.id, title]),
+    responses.flat().map((title) => [imdbTitleId(title), title]).filter(([id]) => id),
   )
+  const missingIds = imdbIds.filter((imdbId) => !imdbRatingValue(titleById.get(imdbId)))
+  const fallbackResults = await Promise.allSettled(missingIds.map(loadImdbTitle))
+  fallbackResults.forEach((result, index) => {
+    if (result.status === 'fulfilled' && imdbRatingValue(result.value)) titleById.set(missingIds[index], result.value)
+  })
   return resolved.map(({ media, imdbId }) => {
     const title = imdbId ? titleById.get(imdbId) : null
-    const imdbRating = Number(title?.rating?.aggregateRating || 0) || null
-    if (!imdbRating) return { ...media, ratingDisplay: { ...media.ratingDisplay, imdb: 'tmdb-fallback' } }
+    const imdbRating = imdbRatingValue(title) || (imdbId ? knownRatings.get(imdbId) : null) || null
+    if (!imdbRating) {
+      if (media.ratings.imdb != null) return media
+      return { ...media, ratingDisplay: { ...media.ratingDisplay, imdb: 'tmdb-fallback' } }
+    }
     return {
       ...media,
       ratings: { ...media.ratings, imdb: imdbRating },
@@ -187,12 +202,12 @@ async function enrichImdbRatings(items) {
   })
 }
 
-async function enrichUniqueImdbRatings(groups) {
+async function enrichUniqueImdbRatings(groups, knownRatings = new Map()) {
   const unique = new Map()
   for (const items of groups) {
     for (const item of items) unique.set(`${item.mediaType}:${item.sourceId}`, item)
   }
-  const enriched = await enrichImdbRatings([...unique.values()])
+  const enriched = await enrichImdbRatings([...unique.values()], knownRatings)
   const lookup = new Map(enriched.map((item) => [`${item.mediaType}:${item.sourceId}`, item]))
   return groups.map((items) => items.map((item) => lookup.get(`${item.mediaType}:${item.sourceId}`) || item))
 }
@@ -269,8 +284,14 @@ export async function getHomeData() {
     ]),
   ])
   const [nowPlayingBase, popularMoviesBase, popularTvBase, trendingCandidates, tmdbTopRated] = localizedGroups
+  const knownImdbRatings = new Map(
+    imdbTopBase
+      .map((item) => [String(item.sourceId), item.ratings.imdb])
+      .filter(([id, rating]) => id.startsWith('tt') && rating != null),
+  )
   const [nowPlaying, popularMovies, popularTvTmdb, enrichedTrending] = await enrichUniqueImdbRatings(
     [nowPlayingBase, popularMoviesBase, popularTvBase, trendingCandidates],
+    knownImdbRatings,
   )
   const popularTv = popularTvTmdb
   const hero = selectImdbHeroMovies([enrichedTrending, nowPlaying, popularMovies])
