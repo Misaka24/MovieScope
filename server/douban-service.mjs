@@ -274,7 +274,7 @@ export async function getDoubanBundle(identity, options = {}) {
     subjectId: identity.doubanId,
     url: `https://movie.douban.com/subject/${identity.doubanId}/`,
     detail: identity.detail,
-    comments: uniqueComments.map((item) => ({
+    comments: uniqueComments.slice(0, 0).map((item) => ({
       id: String(item.cid),
       platform: "豆瓣",
       kind: "comment",

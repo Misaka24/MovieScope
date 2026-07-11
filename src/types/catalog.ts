@@ -20,6 +20,11 @@ export interface CatalogMedia {
   imdbId?: string | null;
   imdbRating?: number | null;
   imdbVoteCount?: number | null;
+  doubanId?: string | null;
+  doubanRating?: number | null;
+  doubanVoteCount?: number | null;
+  externalUrl?: string | null;
+  source?: "tmdb" | "douban";
 }
 
 export interface CatalogPersonSummary {
@@ -203,13 +208,18 @@ export interface PersonDetails {
   deathday: string | null;
   placeOfBirth: string | null;
   department: string | null;
+  gender: number;
+  popularity: number;
+  homepage: string | null;
   profile: string;
   imdbId: string | null;
   imdbUrl: string | null;
   images: string[];
   credits: CatalogMedia[];
+  movieCredits: CatalogMedia[];
+  tvCredits: CatalogMedia[];
+  creditCount: number;
 }
-
 
 export interface ExternalAudienceReview {
   id: string;
@@ -235,9 +245,75 @@ export interface ExternalAudienceReview {
 }
 export interface ExternalReviewsData {
   imdbId: string | null;
-  critics: { status: string; score?: number | null; reviewCount?: number; url?: string | null; message?: string; items: Array<{ reviewer: string | null; site: string | null; score: number | null; quote: string | null; language: string | null; url: string | null }> };
-  audience: { imdb: { status: string; message?: string; items: ExternalAudienceReview[] }; douban: { status: string; message?: string; items: ExternalAudienceReview[] } };
-  awards: { status: string; message?: string; prestigious?: { name: string | null; wins: number; nominations: number } | null; totalWins?: number | null; totalNominations?: number | null; topRank?: number | null };
-  trivia: { status: string; message?: string; totals?: { trivia?: number | null; quotes?: number | null; goofs?: number | null }; items: Array<{ id: string; type: string; label: string; text: string | null; spoiler: boolean; category?: string | null; usersInterested?: number | null; usersVoted?: number | null; lines?: Array<{ text: string; stageDirection?: string; characters?: Array<{ character: string }> }>; comments?: string[] }> };
+  critics: {
+    status: string;
+    score?: number | null;
+    reviewCount?: number;
+    url?: string | null;
+    message?: string;
+    items: Array<{
+      reviewer: string | null;
+      site: string | null;
+      score: number | null;
+      quote: string | null;
+      language: string | null;
+      url: string | null;
+    }>;
+  };
+  audience: {
+    imdb: { status: string; message?: string; items: ExternalAudienceReview[] };
+    douban: {
+      status: string;
+      message?: string;
+      items: ExternalAudienceReview[];
+    };
+  };
+  awards: {
+    status: string;
+    message?: string;
+    prestigious?: {
+      name: string | null;
+      wins: number;
+      nominations: number;
+    } | null;
+    totalWins?: number | null;
+    totalNominations?: number | null;
+    topRank?: number | null;
+  };
+  trivia: {
+    status: string;
+    message?: string;
+    totals?: {
+      trivia?: number | null;
+      quotes?: number | null;
+      goofs?: number | null;
+    };
+    items: Array<{
+      id: string;
+      type: string;
+      label: string;
+      text: string | null;
+      spoiler: boolean;
+      category?: string | null;
+      usersInterested?: number | null;
+      usersVoted?: number | null;
+      lines?: Array<{
+        text: string;
+        stageDirection?: string;
+        characters?: Array<{ character: string }>;
+      }>;
+      comments?: string[];
+    }>;
+  };
   doubanRating: { value: number; count: number; url?: string | null } | null;
+  boxOffice: {
+    status: string;
+    message?: string;
+    data?: Record<string, unknown> | null;
+  };
+  chartRankings: {
+    status: string;
+    message?: string;
+    items: Array<Record<string, unknown>>;
+  };
 }

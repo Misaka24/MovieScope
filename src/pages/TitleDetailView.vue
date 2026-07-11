@@ -91,6 +91,43 @@ const criticItems = computed(
   () =>
     externalReviews.value?.critics.items.slice(0, criticsVisible.value) || [],
 );
+const imdbReviewsUrl = computed(() =>
+  data.value?.imdbId
+    ? `https://www.imdb.com/title/${data.value.imdbId}/reviews/`
+    : null,
+);
+const imdbCriticsUrl = computed(
+  () =>
+    externalReviews.value?.critics.url ||
+    (data.value?.imdbId
+      ? `https://www.imdb.com/title/${data.value.imdbId}/externalreviews/`
+      : null),
+);
+const boxOfficeMetrics = computed(() => {
+  const source = externalReviews.value?.boxOffice.data as
+    Record<string, any> | null | undefined;
+  if (!source) return [];
+  const rows: Array<{ label: string; value: string }> = [];
+  const walk = (value: any, label = "") => {
+    if (rows.length >= 8 || value == null) return;
+    if (typeof value === "number" || typeof value === "string") {
+      if (label && String(value).trim())
+        rows.push({
+          label,
+          value: typeof value === "number" ? formatMoney(value) : String(value),
+        });
+      return;
+    }
+    if (typeof value === "object")
+      for (const [key, child] of Object.entries(value))
+        walk(child, key.replace(/([A-Z])/g, " $1").replace(/_/g, " "));
+  };
+  walk(source);
+  return rows;
+});
+const chartRankingItems = computed(
+  () => externalReviews.value?.chartRankings.items || [],
+);
 const allCommunityReviews = computed(() =>
   [...communityReviews.value]
     .filter(
@@ -506,7 +543,19 @@ async function loadFullReview(
                       >
                         {{ person.name }}
                       </p>
-                      <p class="truncate text-xs text-on-surface-variant">
+                      <p
+                        v-if="person.character"
+                        class="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-primary/90"
+                      >
+                        <span
+                          class="mr-1 text-[10px] font-black tracking-wider text-on-surface-variant"
+                          >&#39280;&#28436;</span
+                        >{{ person.character }}
+                      </p>
+                      <p
+                        v-else
+                        class="truncate text-xs text-on-surface-variant"
+                      >
                         {{ person.character || person.job || "演职人员" }}
                       </p></RouterLink
                     >
@@ -794,7 +843,10 @@ async function loadFullReview(
                       <div
                         class="mt-4 flex flex-wrap gap-4 text-xs text-on-surface-variant"
                       >
-                        <span v-if="review.upVotes != null"
+                        <span
+                          v-if="
+                            review.kind !== 'review' && review.upVotes != null
+                          "
                           >👍 {{ formatCount(review.upVotes) }}</span
                         ><span v-if="review.downVotes != null"
                           >👎 {{ formatCount(review.downVotes) }}</span
@@ -831,6 +883,16 @@ async function loadFullReview(
                       allAudienceItems.length - audienceVisible
                     }}）
                   </button>
+                  <a
+                    v-else-if="audienceSource === 'imdb' && imdbReviewsUrl"
+                    :href="imdbReviewsUrl"
+                    target="_blank"
+                    rel="noreferrer"
+                    class="load-more-button block text-center"
+                    >&#22312; IMDb
+                    &#26597;&#30475;&#26356;&#22810;&#29992;&#25143;&#35780;&#20215;
+                    ?</a
+                  >
                 </section>
                 <section v-if="externalReviews?.critics.items.length">
                   <div class="mb-6 flex items-end justify-between">
@@ -886,6 +948,16 @@ async function loadFullReview(
                       externalReviews.critics.items.length - criticsVisible
                     }}）
                   </button>
+                  <a
+                    v-else-if="imdbCriticsUrl"
+                    :href="imdbCriticsUrl"
+                    target="_blank"
+                    rel="noreferrer"
+                    class="load-more-button block text-center"
+                    >&#22312; IMDb
+                    &#26597;&#30475;&#26356;&#22810;&#24433;&#35780;&#20154;&#35780;&#35770;
+                    ?</a
+                  >
                 </section>
                 <section v-if="related.length">
                   <h2 class="section-title">
@@ -1188,6 +1260,54 @@ async function loadFullReview(
                   </p>
                 </section>
                 <section
+                  v-if="boxOfficeMetrics.length"
+                  class="rounded-2xl border border-white/5 bg-surface-container p-6"
+                >
+                  <h3 class="panel-title">
+                    IMDb &#31080;&#25151;&#25688;&#35201;
+                  </h3>
+                  <div class="mt-5 grid grid-cols-2 gap-3">
+                    <div
+                      v-for="metric in boxOfficeMetrics"
+                      :key="metric.label"
+                      class="metric-card"
+                    >
+                      <strong class="!text-lg">{{ metric.value }}</strong
+                      ><span>{{ metric.label }}</span>
+                    </div>
+                  </div>
+                </section>
+                <section
+                  v-if="chartRankingItems.length"
+                  class="rounded-2xl border border-white/5 bg-surface-container p-6"
+                >
+                  <h3 class="panel-title">
+                    IMDb &#27036;&#21333;&#25490;&#21517;
+                  </h3>
+                  <div class="mt-4 space-y-3">
+                    <div
+                      v-for="(ranking, index) in chartRankingItems"
+                      :key="index"
+                      class="flex items-center justify-between rounded-xl bg-white/[.025] px-4 py-3 text-sm"
+                    >
+                      <span>{{
+                        (ranking as any).node?.chart?.title ||
+                        (ranking as any).chart?.title ||
+                        (ranking as any).chartType ||
+                        "IMDb Chart"
+                      }}</span
+                      ><strong class="text-primary"
+                        >#{{
+                          (ranking as any).node?.rank ||
+                          (ranking as any).rank ||
+                          (ranking as any).node?.currentRank ||
+                          "?"
+                        }}</strong
+                      >
+                    </div>
+                  </div>
+                </section>
+                <section
                   v-if="externalReviews?.trivia.items.length"
                   class="rounded-2xl border border-white/5 bg-surface-container p-6"
                 >
@@ -1383,7 +1503,7 @@ async function loadFullReview(
 }
 .review-filter,
 .review-select {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 0;
   border-radius: 9999px;
   background: var(--color-surface-container, #202228);
   padding: 7px 12px;
@@ -1391,9 +1511,9 @@ async function loadFullReview(
   color: inherit;
 }
 .review-filter.active {
-  border-color: rgba(245, 197, 24, 0.5);
-  background: rgba(245, 197, 24, 0.12);
-  color: #f5c518;
+  background: #f5c518;
+  color: #111317;
+  box-shadow: 0 5px 18px rgba(245, 197, 24, 0.18);
 }
 .review-card {
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -1427,10 +1547,7 @@ async function loadFullReview(
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.025);
-  padding: 12px 14px;
+  padding: 4px 0;
 }
 .review-control > span {
   font-size: 12px;
@@ -1440,6 +1557,9 @@ async function loadFullReview(
 .review-control > div {
   display: flex;
   gap: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 3px;
 }
 .load-more-button {
   margin-top: 20px;

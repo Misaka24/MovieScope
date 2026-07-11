@@ -708,7 +708,7 @@ export async function getExternalTitleReviews(mediaType, id) {
         ? {
             status: "ready",
             url: doubanBundle.url,
-            items: [...doubanBundle.comments, ...doubanBundle.reviews],
+            items: doubanBundle.reviews,
           }
         : {
             status: "unmapped",
@@ -811,6 +811,8 @@ export async function getExternalTitleReviews(mediaType, id) {
           subjectId: doubanBundle.subjectId,
         }
       : null,
+    boxOffice: { status: "unavailable", data: null },
+    chartRankings: { status: "unavailable", items: [] },
   };
 }
 
@@ -853,6 +855,7 @@ export async function getPersonDetails(id) {
       `${credit.media_type}:${credit.id}`,
       mediaSummary(credit, [], credit.media_type),
     );
+  const enrichedCredits = await imdbRatingsFor([...unique.values()]);
   return {
     id: details.id,
     name: details.name,
@@ -867,10 +870,16 @@ export async function getPersonDetails(id) {
     imdbUrl: details.external_ids?.imdb_id
       ? `https://www.imdb.com/name/${details.external_ids.imdb_id}/`
       : null,
-    images: (details.images?.profiles || [])
-      .slice(0, 12)
-      .map((item) => image(item.file_path, "h632", profileFallback)),
-    credits: [...unique.values()].slice(0, 24),
+    gender: details.gender || 0,
+    popularity: number(details.popularity, 0),
+    homepage: details.homepage || null,
+    images: (details.images?.profiles || []).map((item) =>
+      image(item.file_path, "h632", profileFallback),
+    ),
+    credits: enrichedCredits,
+    movieCredits: enrichedCredits.filter((item) => item.mediaType === "movie"),
+    tvCredits: enrichedCredits.filter((item) => item.mediaType === "tv"),
+    creditCount: enrichedCredits.length,
   };
 }
 
@@ -912,6 +921,67 @@ function imdbChartItem(edge) {
     imdbId: item.id,
     imdbRating: number(item.ratingsSummary?.aggregateRating),
     imdbVoteCount: number(item.ratingsSummary?.voteCount),
+  };
+}
+
+function doubanHotItem(item, mediaType) {
+  const yearMatch = String(item.card_subtitle || "").match(/(19|20)\d{2}/);
+  return {
+    id: Number(item.id),
+    mediaType,
+    title: item.title || "?????",
+    originalTitle: null,
+    year: yearMatch ? Number(yearMatch[0]) : null,
+    releaseDate: null,
+    overview: item.card_subtitle || "",
+    poster: item.pic?.large || item.pic?.normal || imageFallback,
+    backdrop: null,
+    genres: [],
+    tmdbRating: null,
+    tmdbVoteCount: 0,
+    popularity: 0,
+    adult: false,
+    imdbId: null,
+    imdbRating: null,
+    imdbVoteCount: null,
+    doubanId: String(item.id),
+    doubanRating: number(item.rating?.value),
+    doubanVoteCount: number(item.rating?.count, 0),
+    externalUrl: `https://movie.douban.com/subject/${item.id}/`,
+    source: "douban",
+  };
+}
+
+export async function getPopularBySource(
+  mediaType,
+  source = "tmdb",
+  pageValue = 1,
+) {
+  if (!["movie", "tv"].includes(mediaType)) throw new Error("??????????");
+  if (source !== "douban")
+    return getBrowsePage(
+      mediaType === "movie" ? "popular-movies" : "popular-tv",
+      pageValue,
+    );
+  const path =
+    mediaType === "movie"
+      ? "/api/douban/get-recent-hot-movie/v1"
+      : "/api/douban/get-recent-hot-tv/v1";
+  const response = await justOne(path, {}, 365 * 24 * 60 * 60 * 1000);
+  const results = (response.items || []).map((item) =>
+    doubanHotItem(item, mediaType),
+  );
+  return {
+    source: "douban",
+    preset: mediaType === "movie" ? "popular-movies" : "popular-tv",
+    title: mediaType === "movie" ? "????" : "????",
+    description: "????????",
+    genres: { movie: [], tv: [] },
+    mediaType,
+    page: 1,
+    totalPages: 1,
+    totalResults: results.length,
+    results,
   };
 }
 
@@ -1071,15 +1141,13 @@ export async function getBrowsePage(preset, pageValue) {
     });
   const results =
     preset === "upcoming"
-      ? mapped
-          .slice(0, 20)
-          .map((item) => ({
-            ...item,
-            imdbRating: null,
-            imdbVoteCount: null,
-            tmdbRating: null,
-            tmdbVoteCount: 0,
-          }))
+      ? mapped.slice(0, 20).map((item) => ({
+          ...item,
+          imdbRating: null,
+          imdbVoteCount: null,
+          tmdbRating: null,
+          tmdbVoteCount: 0,
+        }))
       : await imdbRatingsFor(mapped.slice(0, 20));
   return {
     preset,

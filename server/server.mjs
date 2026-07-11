@@ -10,6 +10,7 @@ import {
   getExternalTitleReviews,
   getPersonDetails,
   getPopularPeople,
+  getPopularBySource,
   getTitleDetails,
   getWatchProviders,
   resolveTitleId,
@@ -693,6 +694,17 @@ const server = createServer(async (request, response) => {
       );
       return;
     }
+    if (request.method === "GET" && url.pathname === "/api/v1/popular") {
+      success(
+        response,
+        await getPopularBySource(
+          url.searchParams.get("type"),
+          url.searchParams.get("source") || "tmdb",
+          url.searchParams.get("page") || 1,
+        ),
+      );
+      return;
+    }
     if (
       request.method === "GET" &&
       url.pathname === "/api/v1/watch-providers"
@@ -708,7 +720,13 @@ const server = createServer(async (request, response) => {
       /^\/api\/v1\/titles\/(movie|tv)\/(\d+)\/external-reviews$/,
     );
     if (externalReviews && request.method === "GET") {
-      success(response, await getExternalTitleReviews(externalReviews[1], Number(externalReviews[2])));
+      success(
+        response,
+        await getExternalTitleReviews(
+          externalReviews[1],
+          Number(externalReviews[2]),
+        ),
+      );
       return;
     }
     const doubanReviewDetail = url.pathname.match(
