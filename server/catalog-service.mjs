@@ -248,6 +248,8 @@ export async function discoverCatalog(params) {
     ? params.sortBy
     : "popularity.desc";
   const yearValue = number(params.year);
+  const yearFrom = number(params.yearFrom);
+  const yearTo = number(params.yearTo);
   const minRating = Math.max(0, Math.min(10, number(params.minRating, 0)));
   const apiParams = {
     language: "zh-CN",
@@ -258,7 +260,7 @@ export async function discoverCatalog(params) {
     include_video: false,
     with_genres: params.genres || undefined,
     "vote_average.gte": minRating || undefined,
-    "vote_count.gte": minRating ? 100 : undefined,
+    "vote_count.gte": minRating || sortBy === "vote_average.desc" ? 100 : undefined,
     with_original_language: params.language || undefined,
     with_watch_providers: params.provider || undefined,
     watch_region: params.provider ? params.watchRegion || "CN" : undefined,
@@ -267,6 +269,11 @@ export async function discoverCatalog(params) {
     apiParams[
       mediaType === "movie" ? "primary_release_year" : "first_air_date_year"
     ] = yearValue;
+  const dateField = mediaType === "movie" ? "primary_release_date" : "first_air_date";
+  if (!yearValue && yearFrom) apiParams[`${dateField}.gte`] = `${yearFrom}-01-01`;
+  if (!yearValue && yearTo) apiParams[`${dateField}.lte`] = `${yearTo}-12-31`;
+  if (sortBy === "primary_release_date.desc" || sortBy === "first_air_date.desc")
+    apiParams[`${dateField}.lte`] = new Date().toISOString().slice(0, 10);
   const [response, genres] = await Promise.all([
     tmdb(`/discover/${mediaType}`, apiParams, 15 * 60 * 1000),
     loadGenres(),
@@ -281,6 +288,8 @@ export async function discoverCatalog(params) {
     filters: {
       genres: params.genres || "",
       year: yearValue,
+      yearFrom,
+      yearTo,
       minRating,
       language: params.language || "",
       provider: params.provider || "",
@@ -721,7 +730,7 @@ export async function getBrowsePage(preset, pageValue) {
     return {
       preset,
       title: "IMDb Top 250",
-      description: "IMDb 用户长期评分形成的经典电影榜单，每 7 天更新一次。",
+      description: "IMDb 用户长期评分形成的经典电影榜单",
       page,
       totalPages: Math.ceil(all.length / size),
       totalResults: all.length,
@@ -774,7 +783,9 @@ export async function getBrowsePage(preset, pageValue) {
         config.mediaType === "multi" ? mediaTypeOf(item) : config.mediaType;
       return mediaSummary(item, genres[mediaType] || [], mediaType);
     });
-  const results = await imdbRatingsFor(mapped.slice(0, 20));
+  const results = preset === "upcoming"
+    ? mapped.slice(0, 20).map((item) => ({ ...item, imdbRating: null, imdbVoteCount: null, tmdbRating: null, tmdbVoteCount: 0 }))
+    : await imdbRatingsFor(mapped.slice(0, 20));
   return {
     preset,
     title: config.title,

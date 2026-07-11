@@ -4,15 +4,18 @@ import type { IndustryNews } from '../../types/media'
 
 const props = defineProps<{ items: IndustryNews[] }>()
 const visibleCount = shallowRef(3)
+const loadCount = shallowRef(0)
 const visibleItems = computed(() => props.items.slice(0, visibleCount.value))
 const hasMore = computed(() => visibleCount.value < props.items.length)
 
 watch(() => props.items, () => {
   visibleCount.value = 3
+  loadCount.value = 0
 })
 
 function showMore() {
   visibleCount.value = Math.min(visibleCount.value + 6, props.items.length)
+  loadCount.value += 1
 }
 
 function formatDate(value: string | null) {
@@ -30,7 +33,9 @@ function formatDate(value: string | null) {
         <div class="flex flex-1 flex-col p-[18px]" :class="{ 'min-h-[230px] justify-center': !news.image }"><div class="mb-2.5 flex items-center justify-between gap-3 text-xs font-bold"><span class="text-primary">{{ news.category }}</span><span class="text-on-surface-variant">{{ formatDate(news.publishedAt) }}</span></div><h3 class="text-[17px] font-extrabold leading-[26px] text-on-surface group-hover:text-primary">{{ news.title }}</h3><p class="mt-2.5 line-clamp-3 text-[13px] leading-[21px] text-on-surface-variant">{{ news.summary }}</p><a v-if="news.url" :href="news.url" target="_blank" rel="noreferrer" class="mt-4 inline-flex items-center gap-1 self-start text-[13px] font-bold text-primary">阅读全文<span class="material-symbols-outlined text-lg">arrow_forward</span></a></div>
       </article>
     </div>
-    <div v-if="hasMore" class="mt-6 flex justify-center"><button type="button" class="inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded border border-white/15 bg-surface-container px-5 text-sm font-bold text-on-surface transition-colors hover:border-primary/50 hover:text-primary" @click="showMore">查看更多<span class="material-symbols-outlined text-lg">expand_more</span></button></div>
+    <div v-if="items.length" class="mt-6 flex justify-center"><button v-if="hasMore && loadCount < 3" type="button" class="news-more" @click="showMore">查看更多<span class="material-symbols-outlined text-lg">expand_more</span></button><RouterLink v-else class="news-more" :to="{name:'news'}">前往新闻中心<span class="material-symbols-outlined text-lg">arrow_forward</span></RouterLink></div>
     <div v-else class="rounded-lg border border-white/5 bg-surface-container-low p-6 text-center text-sm text-on-surface-variant">影坛动态暂不可用。</div>
   </section>
 </template>
+
+<style scoped>.news-more{display:inline-flex;height:40px;align-items:center;gap:6px;white-space:nowrap;border-radius:4px;border:1px solid rgba(255,255,255,.15);background:#242424;padding:0 20px;font-size:14px;font-weight:700;transition:border-color .2s,color .2s}.news-more:hover{border-color:rgba(245,197,24,.5);color:#f5c518}</style>

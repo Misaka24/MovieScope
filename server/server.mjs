@@ -654,6 +654,8 @@ const server = createServer(async (request, response) => {
           sortBy: params.sort,
           genres: params.genres,
           year: params.year,
+          yearFrom: params.yearFrom,
+          yearTo: params.yearTo,
           minRating: params.rating,
           language: params.language,
           provider: params.provider,

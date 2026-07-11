@@ -69,6 +69,8 @@ export interface DiscoverData extends CatalogPage<CatalogMedia> {
   filters: {
     genres: string;
     year: number | null;
+    yearFrom: number | null;
+    yearTo: number | null;
     minRating: number;
     language: string;
     provider: string;
