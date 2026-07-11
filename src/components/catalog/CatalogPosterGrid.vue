@@ -20,5 +20,5 @@ defineProps<{ items: CatalogMedia[]; hideRating?: boolean }>()
 .catalog-poster-grid{display:grid;width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 @media(min-width:640px){.catalog-poster-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}}
 @media(min-width:768px){.catalog-poster-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-@media(min-width:1024px){.catalog-poster-grid{max-width:1030px;grid-template-columns:repeat(5,minmax(0,1fr));column-gap:20px;row-gap:28px;margin-inline:auto}}
+@media(min-width:1024px){.catalog-poster-grid{grid-template-columns:repeat(5,minmax(0,1fr));column-gap:20px;row-gap:28px}}
 </style>
