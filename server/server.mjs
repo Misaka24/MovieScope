@@ -7,6 +7,7 @@ import {
   getBrowsePage,
   getCatalogOptions,
   getIndustryNews,
+  getExternalTitleReviews,
   getPersonDetails,
   getPopularPeople,
   getTitleDetails,
@@ -66,6 +67,7 @@ import {
   requireAdminPermission,
 } from "./admin-service.mjs";
 import { getSettingValue } from "./runtime-config.mjs";
+import { getDoubanReviewDetail } from "./douban-service.mjs";
 
 loadEnv();
 const port = Number(process.env.API_PORT || 8787),
@@ -700,6 +702,20 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "GET" && url.pathname === "/api/v1/news") {
       success(response, await getIndustryNews());
+      return;
+    }
+    const externalReviews = url.pathname.match(
+      /^\/api\/v1\/titles\/(movie|tv)\/(\d+)\/external-reviews$/,
+    );
+    if (externalReviews && request.method === "GET") {
+      success(response, await getExternalTitleReviews(externalReviews[1], Number(externalReviews[2])));
+      return;
+    }
+    const doubanReviewDetail = url.pathname.match(
+      /^\/api\/v1\/douban\/reviews\/(\d+)$/,
+    );
+    if (doubanReviewDetail && request.method === "GET") {
+      success(response, await getDoubanReviewDetail(doubanReviewDetail[1]));
       return;
     }
     const titleReviews = url.pathname.match(

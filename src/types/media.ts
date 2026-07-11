@@ -3,7 +3,7 @@ export interface RatingSet {
   tmdb: number | null
 }
 
-export type RatingDisplayMode = 'official' | 'tmdb-fallback' | 'pending' | 'unavailable'
+export type RatingDisplayMode = 'official' | 'pending' | 'unavailable'
 
 export interface MediaItem {
   id: string

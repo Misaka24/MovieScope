@@ -4,6 +4,8 @@ export function imdbTitleId(value) {
 
 export function imdbRatingValue(value) {
   const candidates = [
+    value?.title?.ratingsSummary?.aggregateRating,
+    value?.title?.ratings_summary?.aggregate_rating,
     value?.rating?.aggregateRating,
     value?.rating?.aggregate_rating,
     value?.ratingsSummary?.aggregateRating,
@@ -20,6 +22,8 @@ export function imdbRatingValue(value) {
 
 export function imdbVoteCountValue(value) {
   const candidates = [
+    value?.title?.ratingsSummary?.voteCount,
+    value?.title?.ratings_summary?.votes_count,
     value?.rating?.voteCount,
     value?.rating?.votesCount,
     value?.rating?.votes_count,

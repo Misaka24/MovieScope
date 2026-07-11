@@ -16,7 +16,7 @@ function movie(sourceId, imdb, display = 'official', backdrop = '/hero.jpg') {
 test('Hero 只选择 IMDb 官方评分项目并按影视 ID 去重', () => {
   const official = movie(1, 7.6)
   const selected = selectImdbHeroMovies([
-    [official, movie(2, null, 'tmdb-fallback'), movie(3, 8.1, 'pending'), movie(4, 7.9, 'official', null)],
+    [official, movie(2, null, 'unavailable'), movie(3, 8.1, 'pending'), movie(4, 7.9, 'official', null)],
     [official, movie(5, 8.3)],
   ])
 

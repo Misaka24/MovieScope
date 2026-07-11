@@ -209,3 +209,35 @@ export interface PersonDetails {
   images: string[];
   credits: CatalogMedia[];
 }
+
+
+export interface ExternalAudienceReview {
+  id: string;
+  platform: "IMDb" | "豆瓣";
+  kind?: "comment" | "review";
+  authorId: string | null;
+  author: string;
+  avatar: string | null;
+  rating: number | null;
+  title: string | null;
+  content: string | null;
+  createdAt: string | null;
+  spoiler: boolean;
+  language: string | null;
+  location?: string | null;
+  upVotes: number | null;
+  downVotes: number | null;
+  helpfulness: number | null;
+  replyCount?: number | null;
+  forwardCount?: number | null;
+  collectCount?: number | null;
+  hotScore: number;
+}
+export interface ExternalReviewsData {
+  imdbId: string | null;
+  critics: { status: string; score?: number | null; reviewCount?: number; url?: string | null; message?: string; items: Array<{ reviewer: string | null; site: string | null; score: number | null; quote: string | null; language: string | null; url: string | null }> };
+  audience: { imdb: { status: string; message?: string; items: ExternalAudienceReview[] }; douban: { status: string; message?: string; items: ExternalAudienceReview[] } };
+  awards: { status: string; message?: string; prestigious?: { name: string | null; wins: number; nominations: number } | null; totalWins?: number | null; totalNominations?: number | null; topRank?: number | null };
+  trivia: { status: string; message?: string; totals?: { trivia?: number | null; quotes?: number | null; goofs?: number | null }; items: Array<{ id: string; type: string; label: string; text: string | null; spoiler: boolean; category?: string | null; usersInterested?: number | null; usersVoted?: number | null; lines?: Array<{ text: string; stageDirection?: string; characters?: Array<{ character: string }> }>; comments?: string[] }> };
+  doubanRating: { value: number; count: number; url?: string | null } | null;
+}

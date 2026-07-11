@@ -21,7 +21,6 @@ const allPermissions = new Set([
 const credentialNames = {
   tmdb: "TMDB_ACCESS_TOKEN",
   imdb: "JUSTONE_API_TOKEN",
-  "imdbapi-dev": null,
 };
 const clean = (value, max = 255) =>
   String(value ?? "")

@@ -32,7 +32,7 @@ const genreOptions = computed(() => type.value === 'tv' ? data.value?.genres.tv 
 const results = computed(() => {
   let items = [...(data.value?.results || [])]
   if (draft.genres.length) items = items.filter((item) => item.mediaType === 'person' || item.mediaType === 'keyword' || item.genres?.some((name) => genreOptions.value.some((genre) => draft.genres.includes(genre.id) && genre.name === name)))
-  items = items.filter((item) => item.mediaType === 'person' || item.mediaType === 'keyword' || ((!draft.yearFrom || (item.year || 0) >= Number(draft.yearFrom)) && (!draft.yearTo || (item.year || 9999) <= Number(draft.yearTo)) && (!draft.minRating || (item.imdbRating ?? item.tmdbRating ?? 0) >= draft.minRating)))
+  items = items.filter((item) => item.mediaType === 'person' || item.mediaType === 'keyword' || ((!draft.yearFrom || (item.year || 0) >= Number(draft.yearFrom)) && (!draft.yearTo || (item.year || 9999) <= Number(draft.yearTo)) && (!draft.minRating || (item.imdbRating ?? 0) >= draft.minRating)))
   if (draft.sort === 'rating') items.sort((a, b) => rating(b) - rating(a))
   if (draft.sort === 'latest') items.sort((a, b) => yearOf(b) - yearOf(a))
   if (draft.sort === 'popularity') items.sort((a, b) => (isKeyword(b) ? 0 : b.popularity || 0) - (isKeyword(a) ? 0 : a.popularity || 0))
@@ -40,13 +40,13 @@ const results = computed(() => {
 })
 function isPerson(item: SearchResult): item is Extract<SearchResult, { mediaType: 'person' }> { return item.mediaType === 'person' }
 function isKeyword(item: SearchResult): item is Extract<SearchResult, { mediaType: 'keyword' }> { return item.mediaType === 'keyword' }
-function rating(item: SearchResult) { return isPerson(item) || isKeyword(item) ? 0 : item.imdbRating ?? item.tmdbRating ?? 0 }
+function rating(item: SearchResult) { return isPerson(item) || isKeyword(item) ? 0 : item.imdbRating ?? 0 }
 function yearOf(item: SearchResult) { return isPerson(item) || isKeyword(item) ? 0 : item.year || 0 }
 function clearFilters() { draft.genres=[];draft.yearFrom='';draft.yearTo='';draft.minRating=0;draft.sort='relevance' }
 function setYearPreset(from: number, to: number) { draft.yearFrom=String(from);draft.yearTo=String(to) }
 function isYearPreset(from: number, to: number) { return draft.yearFrom===String(from)&&draft.yearTo===String(to) }
-function ratingSource(item: CatalogMedia) { return item.imdbRating != null ? 'IMDb' : 'TMDB' }
-function voteCount(item: CatalogMedia) { return item.imdbRating != null ? item.imdbVoteCount : item.tmdbVoteCount }
+function ratingSource(item: CatalogMedia) { return item.imdbRating != null ? 'IMDb' : '暂无' }
+function voteCount(item: CatalogMedia) { return item.imdbRating != null ? item.imdbVoteCount : 0 }
 function ratingProgress(item: CatalogMedia) { return Math.max(0, Math.min(100, rating(item) * 10)) }
 function setPage(next: number) { router.push({ query: { ...route.query, page: Math.max(1, Math.min(data.value?.totalPages || 1, next)) } }) }
 function bookmarkKey(item: CatalogMedia) { return item.mediaType + ':' + item.id }

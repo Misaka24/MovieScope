@@ -1,5 +1,10 @@
-import { imdbApiDev, justOne, tmdb } from "./providers.mjs";
-import { imdbRatingValue, imdbTitleId, imdbVoteCountValue } from "./imdb-rating.mjs";
+import { justOne, tmdb } from "./providers.mjs";
+import {
+  imdbRatingValue,
+  imdbTitleId,
+  imdbVoteCountValue,
+} from "./imdb-rating.mjs";
+import { getDoubanBundle, resolveDoubanSubject } from "./douban-service.mjs";
 
 const imageFallback =
   "https://placehold.co/600x900/1e2024/e2e2e8?text=MovieScope";
@@ -32,6 +37,14 @@ function mediaTypeOf(item, fallback = "movie") {
 function genreNames(ids, genres) {
   const lookup = new Map(genres.map((genre) => [genre.id, genre.name]));
   return (ids || []).map((id) => lookup.get(id)).filter(Boolean);
+}
+
+function pagination(response, results) {
+  return {
+    page: number(response?.page, 1),
+    totalPages: Math.min(500, number(response?.total_pages, 1)),
+    totalResults: number(response?.total_results, results.length),
+  };
 }
 
 function mediaSummary(item, genres = [], fallbackType = "movie") {
@@ -89,30 +102,13 @@ async function loadGenres() {
 async function imdbDetails(imdbId) {
   if (!imdbId) return null;
   try {
-    return await imdbApiDev(`/titles/${imdbId}`, {}, 24 * 60 * 60 * 1000);
+    return await justOne(
+      "/api/imdb/title-redux-overview-query/v1",
+      { id: imdbId, languageCountry: "en_US" },
+      180 * 24 * 60 * 60 * 1000,
+    );
   } catch {
     return null;
-  }
-}
-
-async function loadImdbBatch(titleIds) {
-  if (!titleIds.length) return [];
-  try {
-    const response = await imdbApiDev(
-      "/titles:batchGet",
-      { titleIds },
-      24 * 60 * 60 * 1000,
-    );
-    return response.titles || [];
-  } catch {
-    if (titleIds.length === 1) return [];
-    const middle = Math.ceil(titleIds.length / 2);
-    return (
-      await Promise.all([
-        loadImdbBatch(titleIds.slice(0, middle)),
-        loadImdbBatch(titleIds.slice(middle)),
-      ])
-    ).flat();
   }
 }
 
@@ -124,7 +120,7 @@ async function imdbRatingsFor(items) {
         const external = await tmdb(
           `/${item.mediaType}/${item.id}/external_ids`,
           {},
-          7 * 24 * 60 * 60 * 1000,
+          30 * 24 * 60 * 60 * 1000,
         );
         return { item, imdbId: external.imdb_id || null };
       } catch {
@@ -135,19 +131,12 @@ async function imdbRatingsFor(items) {
   const ids = [
     ...new Set(resolved.map(({ imdbId }) => imdbId).filter(Boolean)),
   ];
-  const batches = [];
-  for (let index = 0; index < ids.length; index += 5)
-    batches.push(ids.slice(index, index + 5));
-  const titles = (await Promise.all(batches.map(loadImdbBatch))).flat();
-  const byId = new Map(titles.map((title) => [imdbTitleId(title), title]).filter(([id]) => id));
-  const missingIds = ids.filter((imdbId) => !byId.has(imdbId));
-  const fallback = await Promise.allSettled(
-    missingIds.map((imdbId) => imdbDetails(imdbId)),
+  const loaded = await Promise.all(ids.map(imdbDetails));
+  const byId = new Map(
+    loaded
+      .map((value, index) => [ids[index], value])
+      .filter(([, value]) => value),
   );
-  fallback.forEach((result, index) => {
-    if (result.status === "fulfilled" && result.value)
-      byId.set(missingIds[index], result.value);
-  });
   return resolved.map(({ item, imdbId }) => {
     const imdb = imdbId ? byId.get(imdbId) : null;
     return {
@@ -157,15 +146,6 @@ async function imdbRatingsFor(items) {
       imdbVoteCount: imdbVoteCountValue(imdb),
     };
   });
-}
-
-function pagination(response, results) {
-  return {
-    page: number(response.page, 1),
-    totalPages: Math.min(number(response.total_pages, 1), 500),
-    totalResults: number(response.total_results, results.length),
-    results,
-  };
 }
 
 export async function searchCatalog(params) {
@@ -224,6 +204,9 @@ export async function searchCatalog(params) {
     query,
     type,
     genres,
+    results: mapped.map(
+      (item) => ratingByKey.get(`${item.mediaType}:${item.id}`) || item,
+    ),
     ...pagination(
       response,
       mapped.map(
@@ -260,7 +243,8 @@ export async function discoverCatalog(params) {
     include_video: false,
     with_genres: params.genres || undefined,
     "vote_average.gte": minRating || undefined,
-    "vote_count.gte": minRating || sortBy === "vote_average.desc" ? 100 : undefined,
+    "vote_count.gte":
+      minRating || sortBy === "vote_average.desc" ? 100 : undefined,
     with_original_language: params.language || undefined,
     with_watch_providers: params.provider || undefined,
     watch_region: params.provider ? params.watchRegion || "CN" : undefined,
@@ -269,10 +253,15 @@ export async function discoverCatalog(params) {
     apiParams[
       mediaType === "movie" ? "primary_release_year" : "first_air_date_year"
     ] = yearValue;
-  const dateField = mediaType === "movie" ? "primary_release_date" : "first_air_date";
-  if (!yearValue && yearFrom) apiParams[`${dateField}.gte`] = `${yearFrom}-01-01`;
+  const dateField =
+    mediaType === "movie" ? "primary_release_date" : "first_air_date";
+  if (!yearValue && yearFrom)
+    apiParams[`${dateField}.gte`] = `${yearFrom}-01-01`;
   if (!yearValue && yearTo) apiParams[`${dateField}.lte`] = `${yearTo}-12-31`;
-  if (sortBy === "primary_release_date.desc" || sortBy === "first_air_date.desc")
+  if (
+    sortBy === "primary_release_date.desc" ||
+    sortBy === "first_air_date.desc"
+  )
     apiParams[`${dateField}.lte`] = new Date().toISOString().slice(0, 10);
   const [response, genres] = await Promise.all([
     tmdb(`/discover/${mediaType}`, apiParams, 15 * 60 * 1000),
@@ -309,40 +298,56 @@ function videoUrl(video) {
 
 function creditsData(credits) {
   return {
-    cast: (credits?.cast || []).slice(0, 18).map((person) => ({
+    cast: (credits?.cast || []).map((person) => ({
       id: person.id,
       name: person.name,
-      character: person.character || null,
+      character:
+        person.character ||
+        person.roles
+          ?.map((role) => role.character)
+          .filter(Boolean)
+          .join(" / ") ||
+        null,
       profile: image(person.profile_path, "w342", profileFallback),
     })),
-    crew: (credits?.crew || [])
-      .filter((person) =>
-        ["Director", "Writer", "Screenplay", "Creator"].includes(person.job),
-      )
-      .slice(0, 12)
-      .map((person) => ({
-        id: person.id,
-        name: person.name,
-        job: person.job,
-        department: person.department,
-        profile: image(person.profile_path, "w342", profileFallback),
-      })),
+    crew: (credits?.crew || []).map((person) => ({
+      id: person.id,
+      name: person.name,
+      job: person.job,
+      department: person.department,
+      profile: image(person.profile_path, "w342", profileFallback),
+    })),
   };
 }
 
-function providerOfficialUrl(name, fallback) {
+function providerOfficialUrl(name, title, fallback) {
   const value = String(name || "").toLowerCase();
   const links = [
-    [["netflix"], "https://www.netflix.com/"],
-    [["disney"], "https://www.disneyplus.com/"],
-    [["amazon prime", "prime video"], "https://www.primevideo.com/"],
-    [["apple tv"], "https://tv.apple.com/"],
+    [
+      ["netflix"],
+      `https://www.netflix.com/search?q=${encodeURIComponent(title)}`,
+    ],
+    [
+      ["disney"],
+      `https://www.disneyplus.com/search?q=${encodeURIComponent(title)}`,
+    ],
+    [
+      ["amazon prime", "prime video"],
+      `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodeURIComponent(title)}`,
+    ],
+    [
+      ["apple tv"],
+      `https://tv.apple.com/search?term=${encodeURIComponent(title)}`,
+    ],
     [["max", "hbo"], "https://www.max.com/"],
-    [["hulu"], "https://www.hulu.com/"],
+    [["hulu"], `https://www.hulu.com/search?q=${encodeURIComponent(title)}`],
     [["iqiyi", "爱奇艺"], "https://www.iq.com/"],
     [["tencent", "腾讯视频", "wetv"], "https://wetv.vip/"],
     [["youku", "优酷"], "https://www.youku.tv/"],
-    [["bilibili", "哔哩哔哩"], "https://www.bilibili.com/"],
+    [
+      ["bilibili", "哔哩哔哩"],
+      `https://search.bilibili.com/all?keyword=${encodeURIComponent(title)}`,
+    ],
     [["mubi"], "https://mubi.com/"],
     [["paramount"], "https://www.paramountplus.com/"],
     [["peacock"], "https://www.peacocktv.com/"],
@@ -356,10 +361,10 @@ function providerOfficialUrl(name, fallback) {
   );
 }
 
-function providerItems(items, fallback) {
+function providerItems(items, title, fallback) {
   return (items || []).map((provider) => ({
     ...provider,
-    officialUrl: providerOfficialUrl(provider.provider_name, fallback),
+    officialUrl: providerOfficialUrl(provider.provider_name, title, fallback),
   }));
 }
 
@@ -383,7 +388,7 @@ export async function getTitleDetails(mediaType, id) {
   const append =
     mediaType === "movie"
       ? "credits,videos,images,external_ids,recommendations,similar,watch/providers,release_dates,keywords,reviews"
-      : "credits,videos,images,external_ids,recommendations,similar,watch/providers,content_ratings,keywords,reviews";
+      : "credits,aggregate_credits,videos,images,external_ids,recommendations,similar,watch/providers,content_ratings,keywords,reviews";
   const details = await tmdb(
     `/${mediaType}/${id}`,
     {
@@ -393,6 +398,13 @@ export async function getTitleDetails(mediaType, id) {
     },
     6 * 60 * 60 * 1000,
   );
+  const fallbackVideos = details.videos?.results?.length
+    ? null
+    : await tmdb(
+        `/${mediaType}/${id}/videos`,
+        { language: "en-US" },
+        7 * 24 * 60 * 60 * 1000,
+      ).catch(() => null);
   const external = details.external_ids || {};
   const imdb = await imdbDetails(external.imdb_id);
   const releaseDates =
@@ -408,7 +420,11 @@ export async function getTitleDetails(mediaType, id) {
           ?.map((item) => item.certification)
           .find(Boolean) || null
       : cnRelease?.rating || null;
-  const credits = creditsData(details.credits);
+  const credits = creditsData(
+    mediaType === "tv"
+      ? details.aggregate_credits || details.credits
+      : details.credits,
+  );
   const runtime =
     mediaType === "movie" ? details.runtime : details.episode_run_time?.[0];
   const providers =
@@ -437,9 +453,11 @@ export async function getTitleDetails(mediaType, id) {
     imdbUrl: external.imdb_id
       ? `https://www.imdb.com/title/${external.imdb_id}/`
       : null,
-    imdbRating: number(imdb?.rating?.aggregateRating),
-    imdbVoteCount: number(imdb?.rating?.voteCount),
-    metacritic: number(imdb?.metacritic?.score),
+    imdbRating: imdbRatingValue(imdb),
+    imdbVoteCount: imdbVoteCountValue(imdb),
+    metacritic: number(
+      imdb?.title?.metacritic?.metascore?.score ?? imdb?.metacritic?.score,
+    ),
     budget: number(details.budget, 0),
     revenue: number(details.revenue, 0),
     originCountries:
@@ -470,7 +488,10 @@ export async function getTitleDetails(mediaType, id) {
         poster: image(season.poster_path, "w342"),
       })) || [],
     credits,
-    videos: (details.videos?.results || [])
+    videos: (details.videos?.results?.length
+      ? details.videos.results
+      : fallbackVideos?.results || []
+    )
       .map((video) => ({
         id: video.id,
         name: video.name,
@@ -481,19 +502,9 @@ export async function getTitleDetails(mediaType, id) {
         site: video.site,
       }))
       .filter((video) => video.url),
-    images: uniqueImages(
-      details.images?.backdrops,
-      "w1280",
-      backdropFallback,
-    ).slice(0, 24),
-    posters: uniqueImages(details.images?.posters, "w500", imageFallback).slice(
-      0,
-      12,
-    ),
-    logos: uniqueImages(details.images?.logos, "w500", imageFallback).slice(
-      0,
-      8,
-    ),
+    images: uniqueImages(details.images?.backdrops, "w1280", backdropFallback),
+    posters: uniqueImages(details.images?.posters, "w500", imageFallback),
+    logos: uniqueImages(details.images?.logos, "w500", imageFallback),
     recommendations,
     similar,
     reviews: (details.reviews?.results || []).slice(0, 8).map((review) => ({
@@ -511,9 +522,21 @@ export async function getTitleDetails(mediaType, id) {
     watchProviders: providers
       ? {
           link: providers.link,
-          flatrate: providerItems(providers.flatrate, providers.link),
-          rent: providerItems(providers.rent, providers.link),
-          buy: providerItems(providers.buy, providers.link),
+          flatrate: providerItems(
+            providers.flatrate,
+            details.title || details.name,
+            providers.link,
+          ),
+          rent: providerItems(
+            providers.rent,
+            details.title || details.name,
+            providers.link,
+          ),
+          buy: providerItems(
+            providers.buy,
+            details.title || details.name,
+            providers.link,
+          ),
         }
       : null,
     createdBy:
@@ -525,6 +548,269 @@ export async function getTitleDetails(mediaType, id) {
     numberOfEpisodes: number(details.number_of_episodes),
     lastAirDate: details.last_air_date || null,
     nextEpisodeDate: details.next_episode_to_air?.air_date || null,
+  };
+}
+
+function justOneModule(result, parser) {
+  if (!result) return { status: "unavailable", items: [] };
+  try {
+    return { status: "ready", ...parser(result) };
+  } catch (error) {
+    return {
+      status: "invalid",
+      message: error instanceof Error ? error.message : String(error),
+      items: [],
+    };
+  }
+}
+
+async function safeJustOne(path, params, ttlMs) {
+  try {
+    return { value: await justOne(path, params, ttlMs), error: null };
+  } catch (error) {
+    return {
+      value: null,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+export async function getExternalTitleReviews(mediaType, id) {
+  const details = await tmdb(
+    `/${mediaType}/${id}`,
+    { language: "zh-CN", append_to_response: "external_ids" },
+    30 * 24 * 60 * 60 * 1000,
+  );
+  const imdbId = details.external_ids?.imdb_id || details.imdb_id || null;
+  if (!imdbId)
+    return {
+      imdbId: null,
+      critics: { status: "unavailable", items: [] },
+      audience: {
+        imdb: { status: "unavailable", items: [] },
+        douban: { status: "unmapped", items: [] },
+      },
+      awards: { status: "unavailable" },
+      trivia: { status: "unavailable", items: [] },
+      doubanRating: null,
+    };
+  const params = { id: imdbId, languageCountry: "en_US" };
+  const doubanIdentityPromise = resolveDoubanSubject({
+    imdbId,
+    mediaType,
+    tmdbId: Number(id),
+    title: details.title || details.name,
+    originalTitle: details.original_title || details.original_name,
+    year: year(details.release_date || details.first_air_date),
+  });
+  const [
+    criticsResult,
+    usersResult,
+    awardsResult,
+    triviaResult,
+    doubanIdentity,
+  ] = await Promise.all([
+    safeJustOne(
+      "/api/imdb/title-critics-review-summary-query/v1",
+      params,
+      90 * 24 * 60 * 60 * 1000,
+    ),
+    safeJustOne(
+      "/api/imdb/title-user-reviews-summary-query/v1",
+      params,
+      30 * 24 * 60 * 60 * 1000,
+    ),
+    safeJustOne(
+      "/api/imdb/title-awards-summary-query/v1",
+      params,
+      180 * 24 * 60 * 60 * 1000,
+    ),
+    safeJustOne(
+      "/api/imdb/title-did-you-know-query/v1",
+      params,
+      180 * 24 * 60 * 60 * 1000,
+    ),
+    doubanIdentityPromise,
+  ]);
+  const doubanBundle = doubanIdentity
+    ? await getDoubanBundle(doubanIdentity)
+    : null;
+  const metacritic = criticsResult.value?.title?.metacritic;
+  const criticReviewItems = [
+    ...(metacritic?.reviews?.edges || []).map(({ node }) => ({
+      reviewer: node.reviewer || null,
+      site: node.site || null,
+      score: node.score ?? null,
+      quote: node.quote?.value || null,
+      language: node.quote?.language || null,
+      url: node.url || null,
+    })),
+    ...(criticsResult.value?.title?.externalLinks?.edges || []).map(
+      ({ node }) => ({
+        reviewer: null,
+        site: node.label || "External review",
+        score: null,
+        quote: node.label || null,
+        language: null,
+        url: node.url || null,
+      }),
+    ),
+  ].filter(
+    (item, index, items) =>
+      items.findIndex(
+        (candidate) =>
+          candidate.url === item.url && candidate.quote === item.quote,
+      ) === index,
+  );
+  const userEdges =
+    usersResult.value?.title?.featuredReviews?.edges ||
+    usersResult.value?.title?.reviews?.edges ||
+    usersResult.value?.title?.userReviews?.edges ||
+    [];
+  const award = awardsResult.value?.title || {};
+  return {
+    imdbId,
+    critics: criticsResult.error
+      ? { status: "error", message: criticsResult.error, items: [] }
+      : {
+          status: "ready",
+          score: metacritic?.metascore?.score ?? null,
+          reviewCount: metacritic?.metascore?.reviewCount ?? 0,
+          url: metacritic?.url || null,
+          items: criticReviewItems,
+        },
+    audience: {
+      imdb: usersResult.error
+        ? { status: "error", message: usersResult.error, items: [] }
+        : {
+            status: "ready",
+            items: userEdges.map(({ node }) => ({
+              id: node.id,
+              platform: "IMDb",
+              authorId: node.author?.id || null,
+              author: node.author?.nickName || "IMDb 用户",
+              avatar: null,
+              rating: node.authorRating ?? null,
+              title: node.summary?.originalText || null,
+              content: node.text?.originalText?.plainText || null,
+              createdAt: node.submissionDate || null,
+              spoiler: Boolean(node.spoiler),
+              language: node.language || null,
+              upVotes: node.helpfulness?.upVotes ?? null,
+              downVotes: node.helpfulness?.downVotes ?? null,
+              helpfulness: node.helpfulness?.score ?? null,
+              hotScore:
+                (node.helpfulness?.upVotes || 0) -
+                (node.helpfulness?.downVotes || 0),
+            })),
+          },
+      douban: doubanBundle
+        ? {
+            status: "ready",
+            url: doubanBundle.url,
+            items: [...doubanBundle.comments, ...doubanBundle.reviews],
+          }
+        : {
+            status: "unmapped",
+            message: "尚未建立可靠的 IMDb 与豆瓣条目映射",
+            items: [],
+          },
+    },
+    awards: awardsResult.error
+      ? { status: "error", message: awardsResult.error }
+      : {
+          status: "ready",
+          prestigious: award.prestigiousAwardSummary
+            ? {
+                name:
+                  award.prestigiousAwardSummary.awardNomination?.award?.text ||
+                  null,
+                wins: award.prestigiousAwardSummary.wins ?? 0,
+                nominations: award.prestigiousAwardSummary.nominations ?? 0,
+              }
+            : null,
+          totalWins: award.totalWins?.total ?? null,
+          totalNominations: award.totalNominations?.total ?? null,
+          topRank: award.ratingsSummary?.topRanking?.rank ?? null,
+        },
+    trivia: triviaResult.error
+      ? { status: "error", message: triviaResult.error, items: [], totals: {} }
+      : (() => {
+          const title = triviaResult.value?.title || {};
+          const interest = (node) => ({
+            usersInterested: node.interestScore?.usersInterested ?? null,
+            usersVoted: node.interestScore?.usersVoted ?? null,
+          });
+          const items = [
+            ...(title.trivia?.edges || []).map(({ node }) => ({
+              id: node.id,
+              type: "trivia",
+              label: "幕后花絮",
+              text: node.text?.plainText || null,
+              spoiler: Boolean(node.isSpoiler),
+              category: node.category?.text || node.category?.id || null,
+              relatedNames: node.relatedNames || null,
+              trademark: node.trademark || null,
+              ...interest(node),
+            })),
+            ...(title.quotes?.edges || []).map(({ node }) => ({
+              id: node.id,
+              type: "quote",
+              label: "经典台词",
+              text: (node.lines || [])
+                .map((line) => line.text)
+                .filter(Boolean)
+                .join("\n"),
+              spoiler: Boolean(node.isSpoiler),
+              lines: node.lines || [],
+              ...interest(node),
+            })),
+            ...(title.goofs?.edges || []).map(({ node }) => ({
+              id: node.id,
+              type: "goof",
+              label: "穿帮与细节",
+              text: node.text?.plainText || null,
+              spoiler: Boolean(node.isSpoiler),
+              category: node.category?.text || node.category?.id || null,
+              ...interest(node),
+            })),
+            ...(title.crazyCredits?.edges || []).map(({ node }) => ({
+              id: node.id,
+              type: "credit",
+              label: "特殊演职员表",
+              text: node.text?.plainText || null,
+              spoiler: false,
+              ...interest(node),
+            })),
+            ...(title.soundtrack?.edges || []).map(({ node }) => ({
+              id: node.id,
+              type: "soundtrack",
+              label: "原声带",
+              text: node.text || null,
+              spoiler: false,
+              comments: (node.comments || [])
+                .map((comment) => comment.plainText)
+                .filter(Boolean),
+            })),
+          ];
+          return {
+            status: "ready",
+            items,
+            totals: {
+              trivia: title.triviaCount?.total ?? null,
+              quotes: title.quotesCount?.total ?? null,
+              goofs: title.goofsCount?.total ?? null,
+            },
+          };
+        })(),
+    doubanRating: doubanBundle
+      ? {
+          value: number(doubanBundle.detail?.rating),
+          count: number(doubanBundle.detail?.rating_count, 0),
+          url: doubanBundle.url,
+          subjectId: doubanBundle.subjectId,
+        }
+      : null,
   };
 }
 
@@ -783,9 +1069,18 @@ export async function getBrowsePage(preset, pageValue) {
         config.mediaType === "multi" ? mediaTypeOf(item) : config.mediaType;
       return mediaSummary(item, genres[mediaType] || [], mediaType);
     });
-  const results = preset === "upcoming"
-    ? mapped.slice(0, 20).map((item) => ({ ...item, imdbRating: null, imdbVoteCount: null, tmdbRating: null, tmdbVoteCount: 0 }))
-    : await imdbRatingsFor(mapped.slice(0, 20));
+  const results =
+    preset === "upcoming"
+      ? mapped
+          .slice(0, 20)
+          .map((item) => ({
+            ...item,
+            imdbRating: null,
+            imdbVoteCount: null,
+            tmdbRating: null,
+            tmdbVoteCount: 0,
+          }))
+      : await imdbRatingsFor(mapped.slice(0, 20));
   return {
     preset,
     title: config.title,
