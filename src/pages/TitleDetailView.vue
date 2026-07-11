@@ -1,69 +1,881 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import GlobalHeader from '../components/global/GlobalHeader.vue'
-import GlobalFooter from '../components/global/GlobalFooter.vue'
-import CatalogPosterCard from '../components/catalog/CatalogPosterCard.vue'
-import PageState from '../components/catalog/PageState.vue'
-import { useAsyncData } from '../composables/useAsyncData'
-import { fetchTitle } from '../services/catalog-api'
-import { formatCount, formatDate, formatMoney, formatRuntime } from '../utils/format'
-import { useAuth } from '../composables/useAuth'
-import { mediaApi, type MediaEntry } from '../services/user-api'
-const route=useRoute(), router=useRouter(), auth=useAuth(), type=computed(()=>String(route.params.type)), id=computed(()=>String(route.params.id)), key=computed(()=>type.value+':'+id.value)
-const {data,loading,error,reload}=useAsyncData(()=>fetchTitle(type.value,id.value),[key])
-const expanded=ref(false),moreImages=ref(false),moreDetails=ref(false),copied=ref(false),userRating=ref(0),watchState=ref(''),favorite=ref(false),reviewText=ref(''),containsSpoiler=ref(false),interactionNotice=ref(''),communityReviews=ref<MediaEntry[]>([])
-const cast=computed(()=>data.value?.credits.cast.slice(0,expanded.value?24:8)||[])
-const images=computed(()=>data.value?.images.slice(0,moreImages.value?24:6)||[])
-const trailer=computed(()=>data.value?.videos.find(v=>v.type==='Trailer'&&v.official)||data.value?.videos[0])
-const related=computed(()=>(data.value?.similar.length?data.value.similar:data.value?.recommendations||[]).slice(0,6))
-const countryNames:Record<string,string>={CN:'中国大陆',US:'美国',GB:'英国',JP:'日本',KR:'韩国',FR:'法国',DE:'德国',CA:'加拿大',HK:'中国香港',TW:'中国台湾'}
-const statusNames:Record<string,string>={Released:'已上映','Post Production':'后期制作','In Production':'制作中',Planned:'已计划',Canceled:'已取消',Returning:'连载中',Ended:'已完结'}
-const countries=computed(()=>data.value?.originCountries.map(code=>countryNames[code]||code).join('、')||'暂无')
-const statusText=computed(()=>statusNames[data.value?.status||'']||data.value?.status||'暂无')
-async function loadInteraction(){if(!data.value)return;try{communityReviews.value=await mediaApi.reviews(data.value.mediaType,data.value.id)}catch{communityReviews.value=[]}if(!auth.user.value){watchState.value='';userRating.value=0;favorite.value=false;reviewText.value='';return}try{const entry=await mediaApi.get(data.value.mediaType,data.value.id);watchState.value=entry?.watchStatus||'';userRating.value=entry?.rating||0;favorite.value=entry?.favorite||false;reviewText.value=entry?.reviewText||'';containsSpoiler.value=entry?.containsSpoiler||false}catch{}}
-watch([key,()=>data.value?.id,()=>auth.user.value?.id],loadInteraction,{immediate:true})
-function requireLogin(){if(auth.user.value)return true;router.push({name:'auth',query:{mode:'login',redirect:route.fullPath}});return false}
-async function saveInteraction(patch:Record<string,unknown>={}){if(!data.value||!requireLogin())return;const body={imdbId:data.value.imdbId,title:data.value.title,posterUrl:data.value.poster,releaseYear:data.value.year,watchStatus:watchState.value||null,favorite:favorite.value,rating:userRating.value||null,reviewText:reviewText.value||null,containsSpoiler:containsSpoiler.value,...patch};const entry=await mediaApi.save(data.value.mediaType,data.value.id,body);watchState.value=entry.watchStatus||'';userRating.value=entry.rating||0;favorite.value=entry.favorite;reviewText.value=entry.reviewText||'';containsSpoiler.value=entry.containsSpoiler;interactionNotice.value='已保存到个人主页';communityReviews.value=await mediaApi.reviews(data.value.mediaType,data.value.id);setTimeout(()=>interactionNotice.value='',1800)}
-async function setWatch(value:string){if(!requireLogin())return;watchState.value=watchState.value===value?'':value;await saveInteraction()}
-async function rate(value:number){if(!requireLogin())return;userRating.value=value;await saveInteraction()}
-async function toggleFavorite(){if(!requireLogin())return;favorite.value=!favorite.value;await saveInteraction()}
-async function saveReview(){await saveInteraction()}
-async function share(){const value=data.value?.imdbUrl||location.href;try{await navigator.clipboard.writeText(value)}catch{const input=document.createElement('textarea');input.value=value;input.style.position='fixed';input.style.opacity='0';document.body.appendChild(input);input.select();document.execCommand('copy');input.remove()}copied.value=true;setTimeout(()=>copied.value=false,1500)}
+import { computed, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import GlobalHeader from "../components/global/GlobalHeader.vue";
+import GlobalFooter from "../components/global/GlobalFooter.vue";
+import CatalogPosterCard from "../components/catalog/CatalogPosterCard.vue";
+import PageState from "../components/catalog/PageState.vue";
+import { useAsyncData } from "../composables/useAsyncData";
+import { fetchTitle } from "../services/catalog-api";
+import {
+  formatCount,
+  formatDate,
+  formatMoney,
+  formatRuntime,
+} from "../utils/format";
+import { useAuth } from "../composables/useAuth";
+import { mediaApi, type MediaEntry } from "../services/user-api";
+const route = useRoute(),
+  router = useRouter(),
+  auth = useAuth(),
+  type = computed(() => String(route.params.type)),
+  id = computed(() => String(route.params.id)),
+  key = computed(() => type.value + ":" + id.value);
+const { data, loading, error, reload } = useAsyncData(
+  () => fetchTitle(type.value, id.value),
+  [key],
+);
+const expanded = ref(false),
+  moreImages = ref(false),
+  moreDetails = ref(false),
+  copied = ref(false),
+  userRating = ref(0),
+  watchState = ref(""),
+  favorite = ref(false),
+  reviewText = ref(""),
+  containsSpoiler = ref(false),
+  interactionNotice = ref(""),
+  communityReviews = ref<MediaEntry[]>([]);
+const cast = computed(
+  () => data.value?.credits.cast.slice(0, expanded.value ? 24 : 8) || [],
+);
+const images = computed(
+  () => data.value?.images.slice(0, moreImages.value ? 24 : 6) || [],
+);
+const trailer = computed(
+  () =>
+    data.value?.videos.find((v) => v.type === "Trailer" && v.official) ||
+    data.value?.videos[0],
+);
+const related = computed(() =>
+  (data.value?.similar.length
+    ? data.value.similar
+    : data.value?.recommendations || []
+  ).slice(0, 6),
+);
+const countryNames: Record<string, string> = {
+  CN: "中国大陆",
+  US: "美国",
+  GB: "英国",
+  JP: "日本",
+  KR: "韩国",
+  FR: "法国",
+  DE: "德国",
+  CA: "加拿大",
+  HK: "中国香港",
+  TW: "中国台湾",
+};
+const statusNames: Record<string, string> = {
+  Released: "已上映",
+  "Post Production": "后期制作",
+  "In Production": "制作中",
+  Planned: "已计划",
+  Canceled: "已取消",
+  Returning: "连载中",
+  Ended: "已完结",
+};
+const countries = computed(
+  () =>
+    data.value?.originCountries
+      .map((code) => countryNames[code] || code)
+      .join("、") || "暂无",
+);
+const statusText = computed(
+  () => statusNames[data.value?.status || ""] || data.value?.status || "暂无",
+);
+async function loadInteraction() {
+  if (!data.value) return;
+  try {
+    communityReviews.value = await mediaApi.reviews(
+      data.value.mediaType,
+      data.value.id,
+    );
+  } catch {
+    communityReviews.value = [];
+  }
+  if (!auth.user.value) {
+    watchState.value = "";
+    userRating.value = 0;
+    favorite.value = false;
+    reviewText.value = "";
+    return;
+  }
+  try {
+    const entry = await mediaApi.get(data.value.mediaType, data.value.id);
+    watchState.value = entry?.watchStatus || "";
+    userRating.value = entry?.rating || 0;
+    favorite.value = entry?.favorite || false;
+    reviewText.value = entry?.reviewText || "";
+    containsSpoiler.value = entry?.containsSpoiler || false;
+  } catch {}
+}
+watch([key, () => data.value?.id, () => auth.user.value?.id], loadInteraction, {
+  immediate: true,
+});
+function requireLogin() {
+  if (auth.user.value) return true;
+  router.push({
+    name: "auth",
+    query: { mode: "login", redirect: route.fullPath },
+  });
+  return false;
+}
+async function saveInteraction(patch: Record<string, unknown> = {}) {
+  if (!data.value || !requireLogin()) return;
+  const body = {
+    imdbId: data.value.imdbId,
+    title: data.value.title,
+    posterUrl: data.value.poster,
+    releaseYear: data.value.year,
+    genres: data.value.genres,
+    originalLanguage: data.value.originalLanguage,
+    originCountry: data.value.originCountries?.[0] || null,
+    watchStatus: watchState.value || null,
+    favorite: favorite.value,
+    rating: userRating.value || null,
+    reviewText: reviewText.value || null,
+    containsSpoiler: containsSpoiler.value,
+    ...patch,
+  };
+  const entry = await mediaApi.save(data.value.mediaType, data.value.id, body);
+  watchState.value = entry.watchStatus || "";
+  userRating.value = entry.rating || 0;
+  favorite.value = entry.favorite;
+  reviewText.value = entry.reviewText || "";
+  containsSpoiler.value = entry.containsSpoiler;
+  interactionNotice.value = "已保存到个人主页";
+  communityReviews.value = await mediaApi.reviews(
+    data.value.mediaType,
+    data.value.id,
+  );
+  setTimeout(() => (interactionNotice.value = ""), 1800);
+}
+async function setWatch(value: string) {
+  if (!requireLogin()) return;
+  watchState.value = watchState.value === value ? "" : value;
+  await saveInteraction();
+}
+async function rate(value: number) {
+  if (!requireLogin()) return;
+  userRating.value = value;
+  await saveInteraction();
+}
+async function toggleFavorite() {
+  if (!requireLogin()) return;
+  favorite.value = !favorite.value;
+  await saveInteraction();
+}
+async function saveReview() {
+  await saveInteraction();
+}
+async function share() {
+  const value = data.value?.imdbUrl || location.href;
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    const input = document.createElement("textarea");
+    input.value = value;
+    input.style.position = "fixed";
+    input.style.opacity = "0";
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand("copy");
+    input.remove();
+  }
+  copied.value = true;
+  setTimeout(() => (copied.value = false), 1500);
+}
 </script>
 
 <template>
-<div class="min-h-screen bg-background text-on-surface"><GlobalHeader/>
-<PageState :loading="loading" :error="error" @retry="reload"><template v-if="data"><main class="pb-16 pt-[50px]">
-<section class="relative h-[70vh] min-h-[560px] w-full overflow-hidden md:h-[85vh]">
-  <img :src="data.backdrop||data.images[0]?.path||data.poster" :alt="data.title+'横向背景'" class="absolute inset-0 h-full w-full object-cover object-center transition-transform duration-[10000ms] hover:scale-105">
-  <div class="absolute inset-0 bg-gradient-to-r from-background/95 via-background/45 to-transparent"></div><div class="absolute inset-0 bg-gradient-to-t from-background via-background/10 to-black/20"></div>
-  <div class="relative mx-auto flex h-full max-w-[1216px] flex-col justify-end px-4 pb-12 md:px-8"><div class="grid grid-cols-12 items-end gap-6">
-    <div class="col-span-3 hidden md:block lg:col-span-2"><div class="aspect-[2/3] overflow-hidden rounded-xl border border-white/10 bg-surface-container shadow-2xl"><img :src="data.poster" :alt="data.title" class="h-full w-full object-cover transition-transform duration-500 hover:scale-105"></div></div>
-    <div class="col-span-12 md:col-span-9 lg:col-span-10"><div class="mb-4 flex flex-wrap items-center gap-3 text-sm text-on-surface-variant"><span class="rounded bg-primary-container/20 px-2.5 py-0.5 text-xs font-bold tracking-wider text-primary">{{data.certification||'未分级'}}</span><span>{{formatDate(data.releaseDate)}}</span><span class="h-1 w-1 rounded-full bg-on-surface-variant"></span><span>{{formatRuntime(data.runtime)}}</span></div>
-      <h1 class="text-4xl font-extrabold tracking-tight md:text-6xl">{{data.title}}</h1><p v-if="data.originalTitle&&data.originalTitle!==data.title" class="mb-8 mt-2 text-xl font-medium text-on-surface-variant md:text-2xl">{{data.originalTitle}}</p>
-      <div class="mt-6 flex flex-wrap items-center gap-4"><div class="flex flex-wrap gap-2"><RouterLink v-for="genre in data.genres" :key="genre" :to="{name:'search',query:{q:genre,type:data.mediaType}}" class="rounded-full border border-white/5 bg-surface-container-highest/50 px-3 py-1 text-xs transition-colors hover:border-primary/40 hover:text-primary">{{genre}}</RouterLink></div><div class="mx-2 hidden h-6 w-px bg-white/10 sm:block"></div>
-      <button class="detail-action bg-primary-container text-on-primary-container hover:bg-primary" :class="watchState==='want'?'ring-2 ring-primary/70':''" @click="setWatch('want')"><span class="material-symbols-outlined">{{watchState==='want'?'check':'add'}}</span>{{watchState==='want'?'已想看':'想看'}}</button><a v-if="trailer" :href="trailer.url" target="_blank" class="detail-action border border-white/10 bg-white/10 hover:bg-white/20"><span class="material-symbols-outlined">play_arrow</span>播放预告片</a><button class="detail-action border border-white/5 bg-white/5 hover:bg-white/10" :class="watchState==='watching'?'ring-2 ring-primary/70':''" @click="setWatch('watching')"><span class="material-symbols-outlined">play_circle</span>{{watchState==='watching'?'正在看':'在看'}}</button><button class="detail-action border border-white/5 bg-white/5 hover:bg-white/10" :class="watchState==='watched'?'ring-2 ring-primary/70':''" @click="setWatch('watched')"><span class="material-symbols-outlined">visibility</span>{{watchState==='watched'?'已看过':'看过'}}</button></div>
-    </div>
-  </div></div>
-</section>
-<section class="mx-auto max-w-[1216px] px-4 py-12 md:px-8"><div class="grid grid-cols-12 gap-12">
-<div class="col-span-12 space-y-12 lg:col-span-8">
-  <section><h2 class="section-title">剧情简介<span></span></h2><p class="text-lg leading-relaxed tracking-wide text-on-surface-variant">{{data.overview||'暂无中文剧情简介。'}}</p></section>
-  <section v-if="data.credits.cast.length"><div class="mb-6 flex items-end justify-between"><h2 class="text-2xl font-bold">演职员表</h2><button class="text-sm font-bold text-primary hover:underline" @click="expanded=!expanded">{{expanded?'收起':`查看全部 ${data.credits.cast.length} 位`}}</button></div><div class="-mx-4 flex gap-6 overflow-x-auto px-4 pb-4 no-scrollbar"><RouterLink v-for="person in cast" :key="person.id" :to="{name:'person',params:{id:person.id}}" class="group w-36 flex-shrink-0"><div class="mb-3 aspect-[4/5] overflow-hidden rounded-xl bg-surface-container"><img :src="person.profile" :alt="person.name" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"></div><p class="truncate text-sm font-bold transition-colors group-hover:text-primary">{{person.name}}</p><p class="truncate text-xs text-on-surface-variant">{{person.character||person.job||'演职人员'}}</p></RouterLink></div></section>
-  <section v-if="data.images.length"><div class="mb-6 flex items-end justify-between"><h2 class="text-2xl font-bold">剧照与图片</h2><button v-if="data.images.length>6" class="text-sm font-bold text-primary hover:underline" @click="moreImages=!moreImages">{{moreImages?'收起':`查看全部 ${data.images.length} 张`}}</button></div><div class="grid grid-cols-2 gap-3 md:grid-cols-3"><a v-for="picture in images" :key="picture.path" :href="picture.path" target="_blank" class="group overflow-hidden rounded-xl bg-surface-container"><img :src="picture.path" :alt="data.title+'剧照'" class="aspect-video h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"></a></div></section>
-  <section v-if="communityReviews.length"><h2 class="section-title">MovieScope 短评<span></span></h2><div class="space-y-5"><article v-for="entry in communityReviews" :key="entry.id" class="border-b border-white/5 pb-5"><div class="flex items-center justify-between gap-4"><RouterLink :to="{name:'public-profile',params:{username:entry.user?.username}}" class="flex items-center gap-3 font-bold hover:text-primary"><img :src="entry.user?.avatarUrl" class="h-8 w-8 rounded-full object-cover">{{entry.user?.displayName}}</RouterLink><strong v-if="entry.rating" class="text-primary">{{entry.rating}} / 10</strong></div><p v-if="entry.containsSpoiler" class="mt-3 text-xs font-bold text-red-300">含剧透</p><p class="mt-2 whitespace-pre-line text-sm leading-6 text-on-surface-variant">{{entry.reviewText}}</p><time class="mt-3 block text-xs text-outline">{{formatDate(entry.updatedAt)}}</time></article></div></section><section v-if="data.reviews.length"><h2 class="section-title">精彩影评<span></span></h2><div class="space-y-5"><article v-for="review in data.reviews" :key="review.id" class="border-b border-white/5 pb-5"><div class="flex justify-between"><b>{{review.author}}</b><strong v-if="review.rating" class="text-primary">{{review.rating}} / 10</strong></div><p class="mt-3 line-clamp-5 whitespace-pre-line text-sm leading-6 text-on-surface-variant">{{review.content}}</p><time class="mt-3 block text-xs text-outline">{{formatDate(review.createdAt)}}</time></article></div></section>
-  <section v-if="related.length"><h2 class="section-title">相似{{data.mediaType==='tv'?'剧集':'电影'}}推荐<span></span></h2><div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6"><CatalogPosterCard v-for="item in related" :key="item.id" :item="item"/></div></section>
-</div>
-<aside class="col-span-12 space-y-8 lg:col-span-4">
-  <section class="space-y-6 rounded-2xl border border-white/5 bg-surface-container p-6"><h3 class="panel-title">媒体口碑</h3><a v-if="data.imdbUrl" :href="data.imdbUrl" target="_blank" class="group flex items-center justify-between"><div class="flex items-center gap-4"><div class="flex h-10 w-10 items-center justify-center rounded bg-[#F5C518] text-xs font-bold text-black">IMDb</div><div><div><strong class="text-xl">{{data.imdbRating?.toFixed(1)||'暂无'}}</strong><span class="text-xs text-on-surface-variant"> /10</span></div><p class="text-[10px] uppercase tracking-wider text-on-surface-variant">{{formatCount(data.imdbVoteCount)}} 人评分</p></div></div><span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">open_in_new</span></a><p v-else class="text-sm text-on-surface-variant">IMDb 暂未收录评分</p></section>
-  <section class="space-y-5 rounded-2xl border border-white/5 bg-surface-container p-6"><div class="flex items-center justify-between"><h3 class="panel-title">你的互动</h3><span v-if="interactionNotice" class="text-xs text-primary">{{interactionNotice}}</span></div><p class="text-sm text-on-surface-variant">为这部作品评分</p><div class="flex flex-wrap"><button v-for="star in 10" :key="star" class="material-symbols-outlined text-xl transition-colors hover:text-primary" :class="star<=userRating?'text-primary':'text-outline'" @click="rate(star)">star</button></div><div class="grid grid-cols-2 gap-2"><button class="interaction-button" :class="watchState==='want'?'active':''" @click="setWatch('want')">想看</button><button class="interaction-button" :class="watchState==='watching'?'active':''" @click="setWatch('watching')">在看</button><button class="interaction-button" :class="watchState==='watched'?'active':''" @click="setWatch('watched')">看过</button><button class="interaction-button" :class="favorite?'active':''" @click="toggleFavorite">{{favorite?'已收藏':'收藏'}}</button></div><textarea v-model="reviewText" class="min-h-24 w-full rounded-lg border border-white/10 bg-surface-container-high p-3 text-sm outline-none focus:border-primary/50" maxlength="5000" placeholder="写下你的短评…"></textarea><label class="flex items-center gap-2 text-xs text-on-surface-variant"><input v-model="containsSpoiler" type="checkbox" class="accent-primary">短评包含剧透</label><button class="w-full rounded-lg bg-primary-container py-3 font-bold text-on-primary-container hover:bg-primary" @click="saveReview">保存评分与短评</button><button class="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 py-3 font-bold hover:bg-white/5" @click="share"><span class="material-symbols-outlined">share</span>{{copied?'已复制 IMDb 链接':'分享电影'}}</button></section>
-  <section class="space-y-6 py-4"><h3 class="panel-title border-b border-white/10 pb-2">{{data.mediaType==='tv'?'剧集':'电影'}}详情</h3><dl class="space-y-4 text-sm"><div class="detail-pair"><dt>上映日期</dt><dd>{{formatDate(data.releaseDate)}}</dd></div><div class="detail-pair"><dt>状态</dt><dd>{{statusText}}</dd></div><div class="detail-pair"><dt>制作公司</dt><dd>{{data.productionCompanies.map(c=>c.name).join('、')||'暂无'}}</dd></div><div class="detail-pair"><dt>国家 / 地区</dt><dd>{{countries}}</dd></div><div class="detail-pair"><dt>语言</dt><dd>{{data.languages.join('、')||'暂无'}}</dd></div><div class="detail-pair"><dt>时长</dt><dd>{{formatRuntime(data.runtime)}}</dd></div><div class="detail-pair"><dt>分级</dt><dd>{{data.certification||'未分级'}}</dd></div><template v-if="data.mediaType==='tv'"><div class="detail-pair"><dt>主创</dt><dd>{{data.createdBy.map(p=>p.name).join('、')||'暂无'}}</dd></div><div class="detail-pair"><dt>季数 / 集数</dt><dd>{{data.numberOfSeasons||'暂无'}} 季 · {{data.numberOfEpisodes||'暂无'}} 集</dd></div><div class="detail-pair"><dt>最后播出</dt><dd>{{formatDate(data.lastAirDate)}}</dd></div><div v-if="data.nextEpisodeDate" class="detail-pair"><dt>下一集</dt><dd>{{formatDate(data.nextEpisodeDate)}}</dd></div></template><template v-if="moreDetails"><div class="detail-pair"><dt>预算</dt><dd>{{formatMoney(data.budget)}}</dd></div><div class="detail-pair"><dt>票房</dt><dd>{{formatMoney(data.revenue)}}</dd></div><div class="detail-pair"><dt>IMDb ID</dt><dd>{{data.imdbId||'暂无'}}</dd></div><div v-if="data.networks.length" class="detail-pair"><dt>播出平台</dt><dd>{{data.networks.map(n=>n.name).join('、')}}</dd></div></template></dl><button class="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/5 bg-surface-container-low py-4 text-sm font-bold text-on-surface-variant transition-all hover:bg-surface-container-high hover:text-on-surface" @click="moreDetails=!moreDetails">{{moreDetails?'收起更多信息':'显示更多信息'}}<span class="material-symbols-outlined" :class="moreDetails?'rotate-180':''">expand_more</span></button></section>
-  <section v-if="data.watchProviders && (data.watchProviders.flatrate.length || data.watchProviders.rent.length || data.watchProviders.buy.length)" class="space-y-4"><div class="flex items-end justify-between"><div><h3 class="panel-title">观看平台</h3><p class="mt-2 text-xs text-on-surface-variant">实际片库与地区可用性以平台页面为准</p></div><a :href="data.watchProviders.link" target="_blank" class="text-xs font-bold text-primary hover:underline">查看全部</a></div><div class="space-y-4"><div v-for="group in [{label:'订阅观看',items:data.watchProviders.flatrate},{label:'租赁',items:data.watchProviders.rent},{label:'购买',items:data.watchProviders.buy}]" :key="group.label" v-show="group.items.length"><p class="mb-2 text-xs font-bold text-on-surface-variant">{{group.label}}</p><div class="grid grid-cols-2 gap-2"><a v-for="provider in group.items" :key="provider.provider_id" :href="provider.officialUrl||data.watchProviders.link" target="_blank" rel="noreferrer" class="group flex items-center gap-2 rounded-lg border border-white/5 bg-surface-container p-2 transition-all hover:border-primary/30 hover:bg-surface-container-high"><img :src="'https://image.tmdb.org/t/p/w92'+provider.logo_path" :alt="provider.provider_name" class="h-9 w-9 rounded-lg"><span class="min-w-0 flex-1 truncate text-xs font-bold transition-colors group-hover:text-primary">{{provider.provider_name}}</span><span class="material-symbols-outlined text-sm text-outline group-hover:text-primary">open_in_new</span></a></div></div></div></section>
-  <div class="flex gap-4"><a v-if="data.homepage" :href="data.homepage" target="_blank" class="side-action"><span class="material-symbols-outlined text-[18px]">public</span>官方网站</a><button class="side-action" @click="share"><span class="material-symbols-outlined text-[18px]">share</span>{{copied?'已复制':'分享'}}</button></div>
-</aside></div></section>
-</main></template></PageState><GlobalFooter/></div>
+  <div class="min-h-screen bg-background text-on-surface">
+    <GlobalHeader />
+    <PageState :loading="loading" :error="error" @retry="reload"
+      ><template v-if="data"
+        ><main class="pb-16 pt-[50px]">
+          <section
+            class="relative h-[70vh] min-h-[560px] w-full overflow-hidden md:h-[85vh]"
+          >
+            <img
+              :src="data.backdrop || data.images[0]?.path || data.poster"
+              :alt="data.title + '横向背景'"
+              class="absolute inset-0 h-full w-full object-cover object-center transition-transform duration-[10000ms] hover:scale-105"
+            />
+            <div
+              class="absolute inset-0 bg-gradient-to-r from-background/95 via-background/45 to-transparent"
+            ></div>
+            <div
+              class="absolute inset-0 bg-gradient-to-t from-background via-background/10 to-black/20"
+            ></div>
+            <div
+              class="relative mx-auto flex h-full max-w-[1216px] flex-col justify-end px-4 pb-12 md:px-8"
+            >
+              <div class="grid grid-cols-12 items-end gap-6">
+                <div class="col-span-3 hidden md:block lg:col-span-2">
+                  <div
+                    class="aspect-[2/3] overflow-hidden rounded-xl border border-white/10 bg-surface-container shadow-2xl"
+                  >
+                    <img
+                      :src="data.poster"
+                      :alt="data.title"
+                      class="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+                    />
+                  </div>
+                </div>
+                <div class="col-span-12 md:col-span-9 lg:col-span-10">
+                  <div
+                    class="mb-4 flex flex-wrap items-center gap-3 text-sm text-on-surface-variant"
+                  >
+                    <span
+                      class="rounded bg-primary-container/20 px-2.5 py-0.5 text-xs font-bold tracking-wider text-primary"
+                      >{{ data.certification || "未分级" }}</span
+                    ><span>{{ formatDate(data.releaseDate) }}</span
+                    ><span
+                      class="h-1 w-1 rounded-full bg-on-surface-variant"
+                    ></span
+                    ><span>{{ formatRuntime(data.runtime) }}</span>
+                  </div>
+                  <h1
+                    class="text-4xl font-extrabold tracking-tight md:text-6xl"
+                  >
+                    {{ data.title }}
+                  </h1>
+                  <p
+                    v-if="
+                      data.originalTitle && data.originalTitle !== data.title
+                    "
+                    class="mb-8 mt-2 text-xl font-medium text-on-surface-variant md:text-2xl"
+                  >
+                    {{ data.originalTitle }}
+                  </p>
+                  <div class="mt-6 flex flex-wrap items-center gap-4">
+                    <div class="flex flex-wrap gap-2">
+                      <RouterLink
+                        v-for="genre in data.genres"
+                        :key="genre"
+                        :to="{
+                          name: 'search',
+                          query: { q: genre, type: data.mediaType },
+                        }"
+                        class="rounded-full border border-white/5 bg-surface-container-highest/50 px-3 py-1 text-xs transition-colors hover:border-primary/40 hover:text-primary"
+                        >{{ genre }}</RouterLink
+                      >
+                    </div>
+                    <div
+                      class="mx-2 hidden h-6 w-px bg-white/10 sm:block"
+                    ></div>
+                    <button
+                      class="detail-action bg-primary-container text-on-primary-container hover:bg-primary"
+                      :class="
+                        watchState === 'want' ? 'ring-2 ring-primary/70' : ''
+                      "
+                      @click="setWatch('want')"
+                    >
+                      <span class="material-symbols-outlined">{{
+                        watchState === "want" ? "check" : "add"
+                      }}</span
+                      >{{ watchState === "want" ? "已想看" : "想看" }}</button
+                    ><a
+                      v-if="trailer"
+                      :href="trailer.url"
+                      target="_blank"
+                      class="detail-action border border-white/10 bg-white/10 hover:bg-white/20"
+                      ><span class="material-symbols-outlined">play_arrow</span
+                      >播放预告片</a
+                    ><button
+                      class="detail-action border border-white/5 bg-white/5 hover:bg-white/10"
+                      :class="
+                        watchState === 'watching'
+                          ? 'ring-2 ring-primary/70'
+                          : ''
+                      "
+                      @click="setWatch('watching')"
+                    >
+                      <span class="material-symbols-outlined">play_circle</span
+                      >{{
+                        watchState === "watching" ? "正在看" : "在看"
+                      }}</button
+                    ><button
+                      class="detail-action border border-white/5 bg-white/5 hover:bg-white/10"
+                      :class="
+                        watchState === 'watched' ? 'ring-2 ring-primary/70' : ''
+                      "
+                      @click="setWatch('watched')"
+                    >
+                      <span class="material-symbols-outlined">visibility</span
+                      >{{
+                        watchState === "watched" ? "已看过" : "看过"
+                      }}</button
+                    ><button
+                      class="detail-action border border-white/5 bg-white/5 hover:bg-white/10"
+                      :class="
+                        favorite ? 'ring-2 ring-primary/70 text-primary' : ''
+                      "
+                      @click="toggleFavorite"
+                    >
+                      <span class="material-symbols-outlined">{{
+                        favorite ? "favorite" : "favorite_border"
+                      }}</span
+                      >{{ favorite ? "已收藏" : "收藏" }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="mx-auto max-w-[1216px] px-4 py-12 md:px-8">
+            <div class="grid grid-cols-12 gap-12">
+              <div class="col-span-12 space-y-12 lg:col-span-8">
+                <section>
+                  <h2 class="section-title">剧情简介<span></span></h2>
+                  <p
+                    class="text-lg leading-relaxed tracking-wide text-on-surface-variant"
+                  >
+                    {{ data.overview || "暂无中文剧情简介。" }}
+                  </p>
+                </section>
+                <section v-if="data.credits.cast.length">
+                  <div class="mb-6 flex items-end justify-between">
+                    <h2 class="text-2xl font-bold">演职员表</h2>
+                    <button
+                      class="text-sm font-bold text-primary hover:underline"
+                      @click="expanded = !expanded"
+                    >
+                      {{
+                        expanded
+                          ? "收起"
+                          : `查看全部 ${data.credits.cast.length} 位`
+                      }}
+                    </button>
+                  </div>
+                  <div
+                    class="-mx-4 flex gap-6 overflow-x-auto px-4 pb-4 no-scrollbar"
+                  >
+                    <RouterLink
+                      v-for="person in cast"
+                      :key="person.id"
+                      :to="{ name: 'person', params: { id: person.id } }"
+                      class="group w-36 flex-shrink-0"
+                      ><div
+                        class="mb-3 aspect-[4/5] overflow-hidden rounded-xl bg-surface-container"
+                      >
+                        <img
+                          :src="person.profile"
+                          :alt="person.name"
+                          class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        />
+                      </div>
+                      <p
+                        class="truncate text-sm font-bold transition-colors group-hover:text-primary"
+                      >
+                        {{ person.name }}
+                      </p>
+                      <p class="truncate text-xs text-on-surface-variant">
+                        {{ person.character || person.job || "演职人员" }}
+                      </p></RouterLink
+                    >
+                  </div>
+                </section>
+                <section v-if="data.images.length">
+                  <div class="mb-6 flex items-end justify-between">
+                    <h2 class="text-2xl font-bold">剧照与图片</h2>
+                    <button
+                      v-if="data.images.length > 6"
+                      class="text-sm font-bold text-primary hover:underline"
+                      @click="moreImages = !moreImages"
+                    >
+                      {{
+                        moreImages
+                          ? "收起"
+                          : `查看全部 ${data.images.length} 张`
+                      }}
+                    </button>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3 md:grid-cols-3">
+                    <a
+                      v-for="picture in images"
+                      :key="picture.path"
+                      :href="picture.path"
+                      target="_blank"
+                      class="group overflow-hidden rounded-xl bg-surface-container"
+                      ><img
+                        :src="picture.path"
+                        :alt="data.title + '剧照'"
+                        class="aspect-video h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    /></a>
+                  </div>
+                </section>
+                <section v-if="communityReviews.length">
+                  <h2 class="section-title">MovieScope 短评<span></span></h2>
+                  <div class="space-y-5">
+                    <article
+                      v-for="entry in communityReviews"
+                      :key="entry.id"
+                      class="border-b border-white/5 pb-5"
+                    >
+                      <div class="flex items-center justify-between gap-4">
+                        <RouterLink
+                          :to="{
+                            name: 'public-profile',
+                            params: { username: entry.user?.username },
+                          }"
+                          class="flex items-center gap-3 font-bold hover:text-primary"
+                          ><img
+                            :src="entry.user?.avatarUrl"
+                            class="h-8 w-8 rounded-full object-cover"
+                          />{{ entry.user?.displayName }}</RouterLink
+                        ><strong v-if="entry.rating" class="text-primary"
+                          >{{ entry.rating }} / 10</strong
+                        >
+                      </div>
+                      <p
+                        v-if="entry.containsSpoiler"
+                        class="mt-3 text-xs font-bold text-red-300"
+                      >
+                        含剧透
+                      </p>
+                      <p
+                        class="mt-2 whitespace-pre-line text-sm leading-6 text-on-surface-variant"
+                      >
+                        {{ entry.reviewText }}
+                      </p>
+                      <time class="mt-3 block text-xs text-outline">{{
+                        formatDate(entry.updatedAt)
+                      }}</time>
+                    </article>
+                  </div>
+                </section>
+                <section v-if="data.reviews.length">
+                  <h2 class="section-title">精彩影评<span></span></h2>
+                  <div class="space-y-5">
+                    <article
+                      v-for="review in data.reviews"
+                      :key="review.id"
+                      class="border-b border-white/5 pb-5"
+                    >
+                      <div class="flex justify-between">
+                        <b>{{ review.author }}</b
+                        ><strong v-if="review.rating" class="text-primary"
+                          >{{ review.rating }} / 10</strong
+                        >
+                      </div>
+                      <p
+                        class="mt-3 line-clamp-5 whitespace-pre-line text-sm leading-6 text-on-surface-variant"
+                      >
+                        {{ review.content }}
+                      </p>
+                      <time class="mt-3 block text-xs text-outline">{{
+                        formatDate(review.createdAt)
+                      }}</time>
+                    </article>
+                  </div>
+                </section>
+                <section v-if="related.length">
+                  <h2 class="section-title">
+                    相似{{ data.mediaType === "tv" ? "剧集" : "电影" }}推荐<span
+                    ></span>
+                  </h2>
+                  <div
+                    class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6"
+                  >
+                    <CatalogPosterCard
+                      v-for="item in related"
+                      :key="item.id"
+                      :item="item"
+                    />
+                  </div>
+                </section>
+              </div>
+              <aside class="col-span-12 space-y-8 lg:col-span-4">
+                <section
+                  class="space-y-6 rounded-2xl border border-white/5 bg-surface-container p-6"
+                >
+                  <h3 class="panel-title">媒体口碑</h3>
+                  <a
+                    v-if="data.imdbUrl"
+                    :href="data.imdbUrl"
+                    target="_blank"
+                    class="group flex items-center justify-between"
+                    ><div class="flex items-center gap-4">
+                      <div
+                        class="flex h-10 w-10 items-center justify-center rounded bg-[#F5C518] text-xs font-bold text-black"
+                      >
+                        IMDb
+                      </div>
+                      <div>
+                        <div>
+                          <strong class="text-xl">{{
+                            data.imdbRating?.toFixed(1) || "暂无"
+                          }}</strong
+                          ><span class="text-xs text-on-surface-variant">
+                            /10</span
+                          >
+                        </div>
+                        <p
+                          class="text-[10px] uppercase tracking-wider text-on-surface-variant"
+                        >
+                          {{ formatCount(data.imdbVoteCount) }} 人评分
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      class="material-symbols-outlined text-on-surface-variant group-hover:text-primary"
+                      >open_in_new</span
+                    ></a
+                  >
+                  <p v-else class="text-sm text-on-surface-variant">
+                    IMDb 暂未收录评分
+                  </p>
+                </section>
+                <section
+                  class="space-y-5 rounded-2xl border border-white/5 bg-surface-container p-6"
+                >
+                  <div class="flex items-center justify-between">
+                    <h3 class="panel-title">你的互动</h3>
+                    <span
+                      v-if="interactionNotice"
+                      class="text-xs text-primary"
+                      >{{ interactionNotice }}</span
+                    >
+                  </div>
+                  <p class="text-sm text-on-surface-variant">为这部作品评分</p>
+                  <div class="flex flex-wrap">
+                    <button
+                      v-for="star in 10"
+                      :key="star"
+                      class="material-symbols-outlined text-xl transition-colors hover:text-primary"
+                      :class="
+                        star <= userRating ? 'text-primary' : 'text-outline'
+                      "
+                      @click="rate(star)"
+                    >
+                      star
+                    </button>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <button
+                      class="interaction-button"
+                      :class="watchState === 'want' ? 'active' : ''"
+                      @click="setWatch('want')"
+                    >
+                      想看</button
+                    ><button
+                      class="interaction-button"
+                      :class="watchState === 'watching' ? 'active' : ''"
+                      @click="setWatch('watching')"
+                    >
+                      在看</button
+                    ><button
+                      class="interaction-button"
+                      :class="watchState === 'watched' ? 'active' : ''"
+                      @click="setWatch('watched')"
+                    >
+                      看过</button
+                    ><button
+                      class="interaction-button"
+                      :class="favorite ? 'active' : ''"
+                      @click="toggleFavorite"
+                    >
+                      {{ favorite ? "已收藏" : "收藏" }}
+                    </button>
+                  </div>
+                  <textarea
+                    v-model="reviewText"
+                    class="min-h-24 w-full rounded-lg border border-white/10 bg-surface-container-high p-3 text-sm outline-none focus:border-primary/50"
+                    maxlength="5000"
+                    placeholder="写下你的短评…"
+                  ></textarea
+                  ><label
+                    class="flex items-center gap-2 text-xs text-on-surface-variant"
+                    ><input
+                      v-model="containsSpoiler"
+                      type="checkbox"
+                      class="accent-primary"
+                    />短评包含剧透</label
+                  ><button
+                    class="w-full rounded-lg bg-primary-container py-3 font-bold text-on-primary-container hover:bg-primary"
+                    @click="saveReview"
+                  >
+                    保存评分与短评</button
+                  ><button
+                    class="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 py-3 font-bold hover:bg-white/5"
+                    @click="share"
+                  >
+                    <span class="material-symbols-outlined">share</span
+                    >{{ copied ? "已复制 IMDb 链接" : "分享电影" }}
+                  </button>
+                </section>
+                <section class="space-y-6 py-4">
+                  <h3 class="panel-title border-b border-white/10 pb-2">
+                    {{ data.mediaType === "tv" ? "剧集" : "电影" }}详情
+                  </h3>
+                  <dl class="space-y-4 text-sm">
+                    <div class="detail-pair">
+                      <dt>上映日期</dt>
+                      <dd>{{ formatDate(data.releaseDate) }}</dd>
+                    </div>
+                    <div class="detail-pair">
+                      <dt>状态</dt>
+                      <dd>{{ statusText }}</dd>
+                    </div>
+                    <div class="detail-pair">
+                      <dt>制作公司</dt>
+                      <dd>
+                        {{
+                          data.productionCompanies
+                            .map((c) => c.name)
+                            .join("、") || "暂无"
+                        }}
+                      </dd>
+                    </div>
+                    <div class="detail-pair">
+                      <dt>国家 / 地区</dt>
+                      <dd>{{ countries }}</dd>
+                    </div>
+                    <div class="detail-pair">
+                      <dt>语言</dt>
+                      <dd>{{ data.languages.join("、") || "暂无" }}</dd>
+                    </div>
+                    <div class="detail-pair">
+                      <dt>时长</dt>
+                      <dd>{{ formatRuntime(data.runtime) }}</dd>
+                    </div>
+                    <div class="detail-pair">
+                      <dt>分级</dt>
+                      <dd>{{ data.certification || "未分级" }}</dd>
+                    </div>
+                    <template v-if="data.mediaType === 'tv'"
+                      ><div class="detail-pair">
+                        <dt>主创</dt>
+                        <dd>
+                          {{
+                            data.createdBy.map((p) => p.name).join("、") ||
+                            "暂无"
+                          }}
+                        </dd>
+                      </div>
+                      <div class="detail-pair">
+                        <dt>季数 / 集数</dt>
+                        <dd>
+                          {{ data.numberOfSeasons || "暂无" }} 季 ·
+                          {{ data.numberOfEpisodes || "暂无" }} 集
+                        </dd>
+                      </div>
+                      <div class="detail-pair">
+                        <dt>最后播出</dt>
+                        <dd>{{ formatDate(data.lastAirDate) }}</dd>
+                      </div>
+                      <div v-if="data.nextEpisodeDate" class="detail-pair">
+                        <dt>下一集</dt>
+                        <dd>{{ formatDate(data.nextEpisodeDate) }}</dd>
+                      </div></template
+                    ><template v-if="moreDetails"
+                      ><div class="detail-pair">
+                        <dt>预算</dt>
+                        <dd>{{ formatMoney(data.budget) }}</dd>
+                      </div>
+                      <div class="detail-pair">
+                        <dt>票房</dt>
+                        <dd>{{ formatMoney(data.revenue) }}</dd>
+                      </div>
+                      <div class="detail-pair">
+                        <dt>IMDb ID</dt>
+                        <dd>{{ data.imdbId || "暂无" }}</dd>
+                      </div>
+                      <div v-if="data.networks.length" class="detail-pair">
+                        <dt>播出平台</dt>
+                        <dd>
+                          {{ data.networks.map((n) => n.name).join("、") }}
+                        </dd>
+                      </div></template
+                    >
+                  </dl>
+                  <button
+                    class="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/5 bg-surface-container-low py-4 text-sm font-bold text-on-surface-variant transition-all hover:bg-surface-container-high hover:text-on-surface"
+                    @click="moreDetails = !moreDetails"
+                  >
+                    {{ moreDetails ? "收起更多信息" : "显示更多信息"
+                    }}<span
+                      class="material-symbols-outlined"
+                      :class="moreDetails ? 'rotate-180' : ''"
+                      >expand_more</span
+                    >
+                  </button>
+                </section>
+                <section
+                  v-if="
+                    data.watchProviders &&
+                    (data.watchProviders.flatrate.length ||
+                      data.watchProviders.rent.length ||
+                      data.watchProviders.buy.length)
+                  "
+                  class="space-y-4"
+                >
+                  <div class="flex items-end justify-between">
+                    <div>
+                      <h3 class="panel-title">观看平台</h3>
+                      <p class="mt-2 text-xs text-on-surface-variant">
+                        实际片库与地区可用性以平台页面为准
+                      </p>
+                    </div>
+                    <a
+                      :href="data.watchProviders.link"
+                      target="_blank"
+                      class="text-xs font-bold text-primary hover:underline"
+                      >查看全部</a
+                    >
+                  </div>
+                  <div class="space-y-4">
+                    <div
+                      v-for="group in [
+                        {
+                          label: '订阅观看',
+                          items: data.watchProviders.flatrate,
+                        },
+                        { label: '租赁', items: data.watchProviders.rent },
+                        { label: '购买', items: data.watchProviders.buy },
+                      ]"
+                      :key="group.label"
+                      v-show="group.items.length"
+                    >
+                      <p class="mb-2 text-xs font-bold text-on-surface-variant">
+                        {{ group.label }}
+                      </p>
+                      <div class="grid grid-cols-2 gap-2">
+                        <a
+                          v-for="provider in group.items"
+                          :key="provider.provider_id"
+                          :href="
+                            provider.officialUrl || data.watchProviders.link
+                          "
+                          target="_blank"
+                          rel="noreferrer"
+                          class="group flex items-center gap-2 rounded-lg border border-white/5 bg-surface-container p-2 transition-all hover:border-primary/30 hover:bg-surface-container-high"
+                          ><img
+                            :src="
+                              'https://image.tmdb.org/t/p/w92' +
+                              provider.logo_path
+                            "
+                            :alt="provider.provider_name"
+                            class="h-9 w-9 rounded-lg"
+                          /><span
+                            class="min-w-0 flex-1 truncate text-xs font-bold transition-colors group-hover:text-primary"
+                            >{{ provider.provider_name }}</span
+                          ><span
+                            class="material-symbols-outlined text-sm text-outline group-hover:text-primary"
+                            >open_in_new</span
+                          ></a
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                <div class="flex gap-4">
+                  <a
+                    v-if="data.homepage"
+                    :href="data.homepage"
+                    target="_blank"
+                    class="side-action"
+                    ><span class="material-symbols-outlined text-[18px]"
+                      >public</span
+                    >官方网站</a
+                  ><button class="side-action" @click="share">
+                    <span class="material-symbols-outlined text-[18px]"
+                      >share</span
+                    >{{ copied ? "已复制" : "分享" }}
+                  </button>
+                </div>
+              </aside>
+            </div>
+          </section>
+        </main></template
+      ></PageState
+    ><GlobalFooter />
+  </div>
 </template>
 <style scoped>
-.detail-action{display:inline-flex;min-height:42px;align-items:center;gap:8px;border-radius:9999px;padding:0 18px;font-weight:700;transition:all .18s ease}.section-title{margin-bottom:24px;display:flex;align-items:center;gap:12px;font-size:24px;font-weight:700}.section-title span{height:1px;flex:1;background:rgba(255,255,255,.05)}.panel-title{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#c5c7ce}.detail-pair{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.detail-pair dt{flex:none;color:#c5c7ce}.detail-pair dd{max-width:70%;text-align:right}.side-action{display:flex;flex:1;align-items:center;justify-content:center;gap:8px;border:1px solid rgba(255,255,255,.05);border-radius:12px;background:#1d2025;padding:12px;font-size:12px;font-weight:700;transition:background-color .18s}.side-action:hover{background:#282a30}.interaction-button{border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;font-size:13px;font-weight:700;transition:.18s}.interaction-button:hover{border-color:rgba(245,197,24,.4);color:#f5c518}.interaction-button.active{background:#f5c518;color:#111;border-color:#f5c518}.no-scrollbar{scrollbar-width:none}.no-scrollbar::-webkit-scrollbar{display:none}
+.detail-action {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  border-radius: 9999px;
+  padding: 0 18px;
+  font-weight: 700;
+  transition: all 0.18s ease;
+}
+.section-title {
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 24px;
+  font-weight: 700;
+}
+.section-title span {
+  height: 1px;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+}
+.panel-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #c5c7ce;
+}
+.detail-pair {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.detail-pair dt {
+  flex: none;
+  color: #c5c7ce;
+}
+.detail-pair dd {
+  max-width: 70%;
+  text-align: right;
+}
+.side-action {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  background: #1d2025;
+  padding: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  transition: background-color 0.18s;
+}
+.side-action:hover {
+  background: #282a30;
+}
+.interaction-button {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  transition: 0.18s;
+}
+.interaction-button:hover {
+  border-color: rgba(245, 197, 24, 0.4);
+  color: #f5c518;
+}
+.interaction-button.active {
+  background: #f5c518;
+  color: #111;
+  border-color: #f5c518;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
 </style>

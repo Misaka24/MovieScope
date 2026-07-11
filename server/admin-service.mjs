@@ -192,6 +192,139 @@ export async function adminAnalytics() {
   };
 }
 
+export async function adminMediaAnalytics(params = {}) {
+  const db = await getDatabase();
+  const mediaType = ["movie", "tv"].includes(params.mediaType)
+    ? params.mediaType
+    : "";
+  const language = clean(params.language, 32);
+  const genre = clean(params.genre, 80);
+  const minRating = Number(params.minRating);
+  const maxRating = Number(params.maxRating);
+  const filters = [],
+    values = [];
+  if (mediaType) {
+    filters.push("e.media_type=?");
+    values.push(mediaType);
+  }
+  if (language) {
+    filters.push("e.original_language=?");
+    values.push(language);
+  }
+  if (Number.isFinite(minRating) && minRating > 0) {
+    filters.push("e.rating>=?");
+    values.push(minRating);
+  }
+  if (Number.isFinite(maxRating) && maxRating > 0) {
+    filters.push("e.rating<=?");
+    values.push(maxRating);
+  }
+  if (genre) {
+    filters.push(
+      "JSON_CONTAINS(COALESCE(e.genres_json,JSON_ARRAY()),JSON_QUOTE(?))",
+    );
+    values.push(genre);
+  }
+  const where = filters.length ? " WHERE " + filters.join(" AND ") : "";
+  const groupFields =
+    "e.media_type,e.tmdb_id,e.imdb_id,e.title,e.poster_url,e.release_year,e.original_language,e.origin_country,e.genres_json";
+  const aggregate =
+    "COUNT(*) records,COUNT(DISTINCT e.user_id) users,SUM(e.watch_status='want') wantCount,SUM(e.watch_status='watching') watchingCount,SUM(e.watch_status='watched') watchedCount,SUM(e.is_favorite=TRUE) favorites,SUM(e.rating IS NOT NULL) ratingCount,ROUND(AVG(e.rating),2) averageRating,SUM(e.review_text IS NOT NULL AND e.review_text<>'') reviewCount";
+  const sortMap = {
+    records: "records",
+    users: "users",
+    favorites: "favorites",
+    ratings: "ratingCount",
+    reviews: "reviewCount",
+    score: "averageRating",
+    watching: "watchingCount",
+    watched: "watchedCount",
+  };
+  const sort = sortMap[params.sort] || "records";
+  const limit = integer(params.limit, 50, 10, 200);
+  const [summary, titles, mediaTypes, languages, ratings, statuses, genres] =
+    await Promise.all([
+      db.query(
+        "SELECT COUNT(*) records,COUNT(DISTINCT user_id) users,COUNT(DISTINCT CONCAT(media_type,':',tmdb_id)) titles,SUM(is_favorite=TRUE) favorites,SUM(rating IS NOT NULL) ratings,SUM(review_text IS NOT NULL AND review_text<>'') reviews,ROUND(AVG(rating),2) averageRating FROM user_media_entries e" +
+          where,
+        values,
+      ),
+      db.query(
+        "SELECT " +
+          groupFields +
+          "," +
+          aggregate +
+          " FROM user_media_entries e" +
+          where +
+          " GROUP BY " +
+          groupFields +
+          " ORDER BY " +
+          sort +
+          " DESC,records DESC LIMIT ?",
+        [...values, limit],
+      ),
+      db.query(
+        "SELECT e.media_type label,COUNT(*) count FROM user_media_entries e" +
+          where +
+          " GROUP BY e.media_type ORDER BY count DESC",
+        values,
+      ),
+      db.query(
+        "SELECT COALESCE(NULLIF(e.original_language,''),'unknown') label,COUNT(*) count,ROUND(AVG(e.rating),2) averageRating FROM user_media_entries e" +
+          where +
+          " GROUP BY label ORDER BY count DESC LIMIT 20",
+        values,
+      ),
+      db.query(
+        "SELECT CASE WHEN e.rating IS NULL THEN '未评分' WHEN e.rating<4 THEN '0-3.9' WHEN e.rating<6 THEN '4-5.9' WHEN e.rating<8 THEN '6-7.9' ELSE '8-10' END label,COUNT(*) count FROM user_media_entries e" +
+          where +
+          " GROUP BY label ORDER BY MIN(COALESCE(e.rating,-1))",
+        values,
+      ),
+      db.query(
+        "SELECT COALESCE(e.watch_status,'无观影状态') label,COUNT(*) count FROM user_media_entries e" +
+          where +
+          " GROUP BY label ORDER BY count DESC",
+        values,
+      ),
+      db.query(
+        "SELECT jt.genre label,COUNT(*) count,ROUND(AVG(e.rating),2) averageRating FROM user_media_entries e JOIN JSON_TABLE(COALESCE(e.genres_json,JSON_ARRAY()), '$[*]' COLUMNS(genre VARCHAR(80) PATH '$')) jt" +
+          where +
+          " GROUP BY jt.genre ORDER BY count DESC LIMIT 24",
+        values,
+      ),
+    ]);
+  return {
+    filters: {
+      mediaType,
+      language,
+      genre,
+      minRating: Number.isFinite(minRating) ? minRating : null,
+      maxRating: Number.isFinite(maxRating) ? maxRating : null,
+      sort,
+      limit,
+    },
+    summary: summary.rows[0],
+    titles: titles.rows.map((row) => ({
+      ...row,
+      genres: parseJson(row.genres_json) || [],
+    })),
+    dimensions: {
+      mediaTypes: mediaTypes.rows,
+      languages: languages.rows,
+      ratings: ratings.rows,
+      statuses: statuses.rows,
+      genres: genres.rows,
+    },
+    definitions: {
+      searchTypes:
+        "来自 user_search_history.search_type，记录用户搜索时选择的全部、电影、剧集、影人等范围。",
+      mediaStatuses:
+        "来自 user_media_entries.watch_status，表示用户对具体影视设置的想看、在看、看过；无观影状态表示该记录只有收藏、评分或短评。",
+    },
+  };
+}
+
 export async function adminUsers(params = {}) {
   const db = await getDatabase(),
     page = integer(params.page, 1, 1),
