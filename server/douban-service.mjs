@@ -3,7 +3,7 @@ import { justOne } from "./providers.mjs";
 import { CACHE_TTL, titleDataTtlMs } from "./cache-policy.mjs";
 
 const mappingTtlMs = 180 * 24 * 60 * 60 * 1000;
-const retryTtlMs = 7 * 24 * 60 * 60 * 1000;
+const retryTtlMs = 24 * 60 * 60 * 1000;
 function normalize(value) {
   return String(value || "")
     .toLowerCase()
@@ -28,6 +28,86 @@ function similarity(left, right) {
   let hit = 0;
   for (const c of b) if (chars.has(c)) hit += 1;
   return hit / Math.max(a.length, b.length);
+}
+export function extractImdbIds(value) {
+  const ids = new Set();
+  const visit = (input, depth = 0) => {
+    if (input == null || depth > 6) return;
+    if (typeof input === "string") {
+      for (const match of input.matchAll(/\btt\d{7,10}\b/gi))
+        ids.add(match[0].toLowerCase());
+      return;
+    }
+    if (Array.isArray(input)) {
+      for (const item of input) visit(item, depth + 1);
+      return;
+    }
+    if (typeof input === "object")
+      for (const [key, item] of Object.entries(input))
+        if (/imdb|info|extra|identifier|id|aka|alias/i.test(key) || depth < 2)
+          visit(item, depth + 1);
+  };
+  visit(value);
+  return [...ids];
+}
+function detailTitle(detail) {
+  return (
+    detail?.title ||
+    detail?.name ||
+    detail?.original_title ||
+    detail?.originalTitle ||
+    detail?.subject?.title ||
+    ""
+  );
+}
+function detailYear(detail) {
+  const values = [
+    detail?.year,
+    detail?.pubdate,
+    detail?.release_date,
+    detail?.releaseDate,
+    detail?.card_subtitle,
+    detail?.subject?.year,
+  ];
+  for (const value of values) {
+    const match = String(value || "").match(/(19|20)\d{2}/);
+    if (match) return Number(match[0]);
+  }
+  return null;
+}
+function detailMediaType(detail) {
+  const value = String(
+    detail?.type || detail?.subtype || detail?.subject_type || detail?.kind || "",
+  ).toLowerCase();
+  if (/tv|television|series|电视剧|剧集/.test(value)) return "tv";
+  if (/movie|film|电影/.test(value)) return "movie";
+  return null;
+}
+export function isStrictDoubanFallback({
+  candidate,
+  detail,
+  title,
+  originalTitle,
+  year,
+  mediaType,
+}) {
+  if (extractImdbIds(detail).length) return false;
+  const titleScore = Math.max(
+    similarity(title, detailTitle(detail) || candidate?.title),
+    similarity(originalTitle, detailTitle(detail) || candidate?.title),
+    similarity(title, candidate?.title),
+    similarity(originalTitle, candidate?.title),
+  );
+  const candidateYear = String(candidate?.subtitle || "").match(/(19|20)\d{2}/)?.[0];
+  const matchedYear = detailYear(detail) || Number(candidateYear) || null;
+  const type = detailMediaType(detail);
+  return (
+    candidate?.source !== "wikidata" &&
+    Number(candidate?.score || 0) >= 1.2 &&
+    titleScore >= 0.9 &&
+    Boolean(year && matchedYear && Math.abs(Number(year) - matchedYear) <= 1) &&
+    (!type || type === mediaType)
+  );
 }
 async function searchCandidates(title, originalTitle, year) {
   const queries = [
@@ -132,11 +212,19 @@ export async function resolveDoubanSubject({
   if (!imdbId) return null;
   const db = await getDatabase();
   const result = await db.query(
-    "SELECT douban_id doubanId,detail_json detail,status,verified_imdb_id verifiedImdbId,retry_after retryAfter FROM media_identity_mappings WHERE imdb_id=? AND media_type=? LIMIT 1",
+    "SELECT douban_id doubanId,detail_json detail,status,verified_imdb_id verifiedImdbId,error_message errorMessage,retry_after retryAfter FROM media_identity_mappings WHERE imdb_id=? AND media_type=? LIMIT 1",
     [imdbId, mediaType],
   );
   const row = result.rows[0];
-  if (row && row.retryAfter && new Date(row.retryAfter) > new Date())
+  const legacyUnmatched =
+    row?.status !== "verified" &&
+    !String(row?.errorMessage || "").includes("映射策略 v2");
+  if (
+    row &&
+    !legacyUnmatched &&
+    row.retryAfter &&
+    new Date(row.retryAfter) > new Date()
+  )
     return row.status === "verified"
       ? {
           doubanId: row.doubanId,
@@ -155,14 +243,24 @@ export async function resolveDoubanSubject({
         { subjectId: candidate.id },
         titleDataTtlMs(releaseDate || (year ? `${year}-01-01` : null)),
       );
-      if (detail?.imdb === imdbId) {
+       const detailImdbIds = extractImdbIds(detail);
+       const exactImdb = detailImdbIds.includes(String(imdbId).toLowerCase());
+       const strictFallback = isStrictDoubanFallback({
+         candidate,
+         detail,
+         title,
+         originalTitle,
+         year,
+         mediaType,
+       });
+       if (exactImdb || strictFallback) {
         await saveMapping({
           imdbId,
           mediaType,
           tmdbId,
           doubanId: candidate.id,
           confidence: Math.min(1, candidate.score),
-          verifiedImdbId: detail.imdb,
+          verifiedImdbId: exactImdb ? imdbId : null,
           status: "verified",
           detail,
         });
@@ -170,7 +268,9 @@ export async function resolveDoubanSubject({
           doubanId: candidate.id,
           detail,
           verified: true,
-          source: candidate.source || "search",
+          source: exactImdb
+            ? candidate.source || "search-imdb-verified"
+            : "search-title-year-verified",
         };
       }
     } catch (error) {
@@ -182,7 +282,7 @@ export async function resolveDoubanSubject({
     mediaType,
     tmdbId,
     status: "unmatched",
-    error: "未找到 IMDb 完全匹配的豆瓣条目",
+    error: "未找到可靠的豆瓣条目（映射策略 v2）",
   });
   return null;
 }
