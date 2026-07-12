@@ -19,4 +19,4 @@ CREATE TABLE IF NOT EXISTS media_identity_mappings (
   KEY idx_media_identity_retry (status, retry_after)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-UPDATE api_provider_configs SET enabled = FALSE, notes = '已停用；IMDb 数据统一改由 Just One API 提供' WHERE provider_key = 'imdbapi-dev';
+DELETE FROM api_provider_configs WHERE provider_key = 'imdbapi-dev';

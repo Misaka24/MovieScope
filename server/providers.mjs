@@ -82,7 +82,7 @@ export async function tmdb(path, params = {}, ttlMs = 15 * 60 * 1000) {
 }
 
 export async function justOne(path, params = {}, ttlMs = 30 * 60 * 1000) {
-  const runtime = await getProviderRuntime("imdb", {
+  const runtime = await getProviderRuntime("justone", {
     baseUrl: process.env.JUSTONE_API_BASE_URL || "https://api.justoneapi.com",
     requestTimeoutMs: requestTimeout,
   });
@@ -96,7 +96,7 @@ export async function justOne(path, params = {}, ttlMs = 30 * 60 * 1000) {
   const cacheKey = `justone:${path}:${JSON.stringify(params)}`;
   const result = await cachedSql({
     cacheKey,
-    provider: "imdb",
+    provider: "justone",
     operation: path,
     ttlMs,
     loader: async () => {

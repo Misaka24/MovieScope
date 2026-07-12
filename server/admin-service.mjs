@@ -20,7 +20,7 @@ const allPermissions = new Set([
 ]);
 const credentialNames = {
   tmdb: "TMDB_ACCESS_TOKEN",
-  imdb: "JUSTONE_API_TOKEN",
+  justone: "JUSTONE_API_TOKEN",
 };
 const clean = (value, max = 255) =>
   String(value ?? "")
@@ -931,7 +931,7 @@ export async function adminTestProvider(admin, key, ip) {
     if (!token) throw httpError(400, "TMDB 凭据未配置");
     headers.Authorization = "Bearer " + token;
   }
-  if (key === "imdb" && token) url.searchParams.set("token", token);
+  if (key === "justone" && token) url.searchParams.set("token", token);
   const started = performance.now();
   let status = "success",
     errorMessage = null,

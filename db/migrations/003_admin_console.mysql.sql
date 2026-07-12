@@ -139,8 +139,7 @@ SELECT u.id,g.id FROM users u JOIN admin_groups g ON g.slug='super-admin' WHERE 
 
 INSERT INTO api_provider_configs (provider_key,display_name,base_url,health_path,enabled,request_timeout_ms,documentation_url,notes,is_system) VALUES
 ('tmdb','TMDB','https://api.themoviedb.org/3','/configuration',TRUE,25000,'https://developer.themoviedb.org/','影视资料、图片、演职员、发现和观看平台',TRUE),
-('imdbapi-dev','imdbapi.dev','https://api.imdbapi.dev','/',TRUE,25000,'https://imdbapi.dev/','普通 IMDb 影片、剧集与评分数据',TRUE),
-('imdb','Just One API','https://api.justoneapi.com','/',TRUE,25000,NULL,'仅保留 IMDb Top 250 与影视新闻',TRUE)
+('justone','Just One API','https://api.justoneapi.com','/',TRUE,25000,NULL,'IMDb 评分、评论、奖项、票房、榜单、新闻，以及豆瓣评分、长评和近期热门',TRUE)
 ON DUPLICATE KEY UPDATE display_name=VALUES(display_name),documentation_url=VALUES(documentation_url),is_system=TRUE;
 
 INSERT INTO site_settings (setting_key,value_json,description,is_public) VALUES
