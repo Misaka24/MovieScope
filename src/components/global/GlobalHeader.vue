@@ -33,7 +33,7 @@ const menuGroups = [
   { icon: 'movie', title: '电影', items: ['正在上映', '即将上映', '热门电影', '高分电影', '按类型浏览'] },
   { icon: 'live_tv', title: '剧集', items: ['热门剧集', '高分剧集', '今日播出', '按类型浏览'] },
   { icon: 'explore', title: '探索', items: ['今日趋势', '本周趋势', '观看平台', '地区与年份'] },
-  { icon: 'emoji_events', title: '榜单', items: ['IMDb Top 250', '电影票房榜'] },
+  { icon: 'emoji_events', title: '榜单', items: ['IMDb Top 250', 'IMDb 剧集 Top 250', '电影票房榜'] },
   { icon: 'person', title: '影人', items: ['热门影人', '热门演员', '导演与编剧'] },
   { icon: 'newspaper', title: '资讯', items: ['影坛动态'] },
 ]
@@ -68,6 +68,7 @@ function openMenuItem(group: string, item: string) {
     '探索/观看平台': { name: 'providers' },
     '探索/地区与年份': { name: 'explore' },
     '榜单/IMDb Top 250': { name: 'browse', params: { preset: 'imdb-top-250' } },
+    '榜单/IMDb 剧集 Top 250': { name: 'browse', params: { preset: 'imdb-top-250-tv' } },
     '榜单/电影票房榜': { name: 'explore', query: { media: 'movie', sort: 'revenue.desc' } },
     '影人/热门影人': { name: 'people' },
     '影人/热门演员': { name: 'people', query: { department: 'Acting' } },

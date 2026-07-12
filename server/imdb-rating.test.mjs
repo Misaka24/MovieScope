@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { imdbRatingValue, imdbTitleId, imdbVoteCountValue } from './imdb-rating.mjs'
 
-test('兼容 imdbapi.dev 新旧评分字段', () => {
+test('兼容 IMDb Redux 新旧评分字段', () => {
   assert.equal(imdbRatingValue({ rating: { aggregateRating: 8.7, voteCount: 1200 } }), 8.7)
   assert.equal(imdbRatingValue({ rating: { aggregate_rating: 8.6, votes_count: 1100 } }), 8.6)
   assert.equal(imdbRatingValue({ ratingsSummary: { aggregateRating: 8.5, voteCount: 1000 } }), 8.5)

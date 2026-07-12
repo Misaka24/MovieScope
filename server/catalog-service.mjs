@@ -5,7 +5,12 @@ import {
   imdbVoteCountValue,
 } from "./imdb-rating.mjs";
 import { getDoubanBundle, resolveDoubanSubject } from "./douban-service.mjs";
-import { CACHE_TTL, titleDataTtlMs } from "./cache-policy.mjs";
+import {
+  CACHE_TTL,
+  awardsTtlMs,
+  titleDataTtlMs,
+  triviaTtlMs,
+} from "./cache-policy.mjs";
 
 const imageFallback =
   "https://placehold.co/600x900/1e2024/e2e2e8?text=MovieScope";
@@ -607,11 +612,14 @@ export async function getExternalTitleReviews(mediaType, id) {
       awards: { status: "unavailable" },
       trivia: { status: "unavailable", items: [] },
       doubanRating: null,
+      boxOffice: { status: "unavailable", data: null },
+      chartRankings: { status: "unavailable", items: [] },
     };
   const params = { id: imdbId, languageCountry: "en_US" };
   const titleTtlMs = titleDataTtlMs(
     details.release_date || details.first_air_date,
   );
+  const releaseDate = details.release_date || details.first_air_date;
   const doubanIdentityPromise = resolveDoubanSubject({
     imdbId,
     mediaType,
@@ -639,8 +647,16 @@ export async function getExternalTitleReviews(mediaType, id) {
       params,
       titleTtlMs,
     ),
-    safeJustOne("/api/imdb/title-awards-summary-query/v1", params, titleTtlMs),
-    safeJustOne("/api/imdb/title-did-you-know-query/v1", params, titleTtlMs),
+    safeJustOne(
+      "/api/imdb/title-awards-summary-query/v1",
+      params,
+      awardsTtlMs(releaseDate),
+    ),
+    safeJustOne(
+      "/api/imdb/title-did-you-know-query/v1",
+      params,
+      triviaTtlMs(releaseDate),
+    ),
     safeJustOne("/api/imdb/title-box-office-summary/v1", params, titleTtlMs),
     doubanIdentityPromise,
   ]);

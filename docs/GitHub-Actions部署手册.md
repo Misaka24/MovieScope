@@ -1,5 +1,7 @@
 # GitHub Actions 自动部署
 
+> 当前实现基线：2026-07-12。生产环境只需配置 TMDB 与 Just One API 凭据，不再配置 `imdbapi.dev`。
+
 本项目在推送到 `master` 后自动执行：代码检查 → 测试 → 构建 Web/API 镜像 → 推送 GHCR → SSH 到服务器备份 MySQL → 拉取镜像 → 更新容器 → 健康检查。
 
 ## 1. 服务器首次准备

@@ -104,26 +104,40 @@ const imdbCriticsUrl = computed(
       : null),
 );
 const boxOfficeMetrics = computed(() => {
-  const source = externalReviews.value?.boxOffice.data as
-    Record<string, any> | null | undefined;
+  const source = externalReviews.value?.boxOffice.data as {
+    budget?: { amount?: number | null; currency?: string | null } | null;
+    openingWeekends?: Array<{
+      amount?: number | null;
+      currency?: string | null;
+      date?: string | null;
+    }>;
+    domestic?: { amount?: number | null; currency?: string | null } | null;
+    worldwide?: { amount?: number | null; currency?: string | null } | null;
+  } | null | undefined;
   if (!source) return [];
-  const rows: Array<{ label: string; value: string }> = [];
-  const walk = (value: any, label = "") => {
-    if (rows.length >= 8 || value == null) return;
-    if (typeof value === "number" || typeof value === "string") {
-      if (label && String(value).trim())
-        rows.push({
-          label,
-          value: typeof value === "number" ? formatMoney(value) : String(value),
-        });
-      return;
-    }
-    if (typeof value === "object")
-      for (const [key, child] of Object.entries(value))
-        walk(child, key.replace(/([A-Z])/g, " $1").replace(/_/g, " "));
+  const formatAmount = (
+    value?: { amount?: number | null; currency?: string | null } | null,
+  ) => {
+    if (value?.amount == null) return null;
+    return new Intl.NumberFormat("zh-CN", {
+      style: "currency",
+      currency: value.currency || "USD",
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(value.amount);
   };
-  walk(source);
-  return rows;
+  const opening = source.openingWeekends?.[0];
+  return [
+    { label: "制作预算", value: formatAmount(source.budget) },
+    {
+      label: opening?.date
+        ? `首周末票房 · ${formatDate(opening.date)}`
+        : "首周末票房",
+      value: formatAmount(opening),
+    },
+    { label: "北美累计票房", value: formatAmount(source.domestic) },
+    { label: "全球累计票房", value: formatAmount(source.worldwide) },
+  ].filter((item): item is { label: string; value: string } => Boolean(item.value));
 });
 const chartRankingItems = computed(
   () => externalReviews.value?.chartRankings.items || [],
@@ -718,7 +732,7 @@ async function loadFullReview(
                 </section>
                 <section v-if="externalReviews">
                   <h2 class="section-title">影迷评价<span></span></h2>
-                  <div class="mb-6 grid gap-4 sm:grid-cols-3">
+                  <div class="review-toolbar mb-6">
                     <div class="review-control">
                       <span>评论平台</span>
                       <div>
@@ -844,17 +858,15 @@ async function loadFullReview(
                         class="mt-4 flex flex-wrap gap-4 text-xs text-on-surface-variant"
                       >
                         <span
-                          v-if="
-                            review.kind !== 'review' && review.upVotes != null
-                          "
+                          v-if="review.kind !== 'review' && Number(review.upVotes) > 0"
                           >👍 {{ formatCount(review.upVotes) }}</span
-                        ><span v-if="review.downVotes != null"
+                        ><span v-if="Number(review.downVotes) > 0"
                           >👎 {{ formatCount(review.downVotes) }}</span
-                        ><span v-if="review.replyCount != null"
+                        ><span v-if="Number(review.replyCount) > 0"
                           >回复 {{ formatCount(review.replyCount) }}</span
-                        ><span v-if="review.forwardCount != null"
+                        ><span v-if="Number(review.forwardCount) > 0"
                           >转发 {{ formatCount(review.forwardCount) }}</span
-                        ><span v-if="review.collectCount != null"
+                        ><span v-if="Number(review.collectCount) > 0"
                           >收藏 {{ formatCount(review.collectCount) }}</span
                         ><span v-if="review.helpfulness != null"
                           >有用度
@@ -1260,7 +1272,10 @@ async function loadFullReview(
                   </p>
                 </section>
                 <section
-                  v-if="boxOfficeMetrics.length"
+                  v-if="
+                    externalReviews?.boxOffice &&
+                    externalReviews.boxOffice.status !== 'unavailable'
+                  "
                   class="rounded-2xl border border-white/5 bg-surface-container p-6"
                 >
                   <h3 class="panel-title">
@@ -1276,6 +1291,15 @@ async function loadFullReview(
                       ><span>{{ metric.label }}</span>
                     </div>
                   </div>
+                  <p
+                    v-if="!boxOfficeMetrics.length"
+                    class="mt-4 text-sm text-on-surface-variant"
+                  >
+                    {{
+                      externalReviews?.boxOffice.message ||
+                      "IMDb 暂未提供这部影视的票房摘要。"
+                    }}
+                  </p>
                 </section>
                 <section
                   v-if="chartRankingItems.length"
@@ -1509,6 +1533,7 @@ async function loadFullReview(
   padding: 7px 12px;
   font-size: 12px;
   color: inherit;
+  white-space: nowrap;
 }
 .review-filter.active {
   background: #f5c518;
@@ -1545,8 +1570,7 @@ async function loadFullReview(
 .review-control {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 9px;
   padding: 4px 0;
 }
 .review-control > span {
@@ -1560,6 +1584,12 @@ async function loadFullReview(
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.045);
   padding: 3px;
+}
+.review-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px 34px;
 }
 .load-more-button {
   margin-top: 20px;

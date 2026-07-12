@@ -1,123 +1,68 @@
 # MovieScope
 
-MovieScope 是一个基于 Vue 3、Vite、TypeScript、Node.js 和 MySQL 的影视搜索、发现、评分与用户社区网站。浏览器只访问 MovieScope 后端，不直接携带第三方 API 密钥。
+MovieScope 是一个基于 Vue 3、TypeScript、Node.js 与 MySQL 的影视资料聚合、发现、评分评价和个人观影管理平台。TMDB 是免费主体数据源；Just One API 提供 IMDb 与豆瓣深度数据；浏览器只访问 MovieScope 后端，不接触第三方密钥。
 
-## 功能
+## 主要功能
 
-- 首页、搜索、探索、榜单、新闻、影视详情和影人详情；
-- TMDB 影视资料与中文本地化信息；
-- imdbapi.dev 的 IMDb 单片评分数据；
-- Just One API 的 IMDb Top 250 与新闻数据；
-- 注册、登录、HttpOnly Cookie 会话和登录限流；
-- 想看、在看、看过、收藏、评分和短评；
-- 个人中心、公开/私密主页、浏览与搜索历史；
-- 后台统计分析、用户详情与批量操作、管理员分组和细粒度权限；
-- API Provider 配置、状态测试、SQL 缓存管理、内容审核和多类日志；
-- 注册开关、维护模式、站点公告和短评发布策略；
-- 第三方 API 响应使用 MySQL 持久化缓存，不使用进程内业务缓存。
+- 首页、搜索、探索、新闻、IMDb 电影/剧集 Top 250；
+- 电影/剧集详情、横向 Hero、预告片、完整演职员和剧照页面；
+- IMDb 评分、影评人评论、用户评价、奖项、“你知道吗”和票房摘要；
+- 豆瓣评分、长评、近期热门电影/剧集及 IMDb→豆瓣 ID 映射；
+- 站内星级评分、评价、剧透筛选、个人主页与历史；
+- 注册登录、HttpOnly Cookie 会话、管理员权限、审核、Provider 与缓存管理；
+- MySQL 持久化缓存、动态 TTL 和上游故障 stale 回退。
 
-豆瓣数据接口当前暂停调用和展示。
+## 技术栈
 
-## 文档
+| 层级 | 技术 |
+| --- | --- |
+| 前端 | Vue 3、TypeScript、Vue Router、Vite、Tailwind CSS |
+| 后端 | Node.js ESM、原生 `node:http`、Fetch API |
+| 数据库 | MySQL 8、`mysql2/promise`、SQL migrations |
+| 数据源 | TMDB、Just One IMDb/豆瓣、Wikidata SPARQL |
+| 部署 | Docker、Docker Compose、Nginx、GitHub Actions、GHCR |
 
-- [用户使用手册](./docs/用户使用手册.md)
-- [管理员操作手册](./docs/管理员操作手册.md)
-- [需求理解](./docs/需求理解.md)
-- [方案设计](./docs/方案设计.md)
-- [代码审查](./docs/代码审查.md)
+## 数据分工
+
+- TMDB：搜索、趋势、中文主体资料、海报/剧照、预告片、演职员、影人、推荐和默认热门榜。
+- Just One IMDb：Redux 评分与详情、用户/影评人评价、奖项、票房、“你知道吗”、新闻和电影/剧集 Top 250。
+- Just One 豆瓣：条目评分、长篇影评和近期热门；豆瓣短评接口已停用。
+- MySQL：账号、会话、站内评价、历史、管理员数据、API 缓存和外部 ID 映射。
 
 ## 本地运行
 
-1. 创建 MySQL 数据库 `moviescope`。
-2. 复制 `.env.example` 为 `.env`，填写 MySQL 参数和需要使用的第三方 API Token。
-3. 安装依赖：`npm install`。
-4. 同时启动前后端：`npm run dev:all`。
-5. 打开 `http://127.0.0.1:5173/`。
-
-也可以分别启动：
+1. 安装 Node.js 20+ 与 MySQL 8，并创建 `moviescope` 数据库。
+2. 复制 `.env.example` 为 `.env`，填写 MySQL、`TMDB_ACCESS_TOKEN` 和 `JUSTONE_API_TOKEN`。
+3. 执行 `npm install`。
+4. 执行 `npm run dev:all`，访问 `http://127.0.0.1:5173`。
 
 ```powershell
 npm run api
 npm run dev:web
-```
-
-后端默认监听 `http://127.0.0.1:8787`，Vite 将 `/api` 请求代理到后端。
-
-## MySQL 与迁移
-
-后端启动时会按文件名顺序自动执行 `db/migrations/*.mysql.sql`。当前主要业务表包括：
-
-- `users`
-- `user_sessions`
-- `auth_login_attempts`
-- `user_media_entries`
-- `user_browse_history`
-- `user_search_history`
-- `admin_audit_logs`
-- `admin_groups`
-- `admin_permissions`
-- `admin_group_permissions`
-- `user_admin_groups`
-- `user_permission_overrides`
-- `admin_user_notes`
-- `api_provider_configs`
-- `site_settings`
-- `api_cache`
-- `provider_sync_logs`
-
-`MYSQL_URL` 配置后优先于 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD` 和 `MYSQL_DATABASE`。
-
-## 数据来源
-
-- TMDB：中文标题、类型、海报、背景图、简介、演职员、图片、上映信息、热门电影、热门剧集、发现筛选和观看平台等。
-- imdbapi.dev：通过 IMDb ID 获取普通电影和剧集的 IMDb 数据与评分。
-- Just One API：暂时仅保留 IMDb Top 250 和影视新闻。
-- 豆瓣：当前暂停，不发起请求，也不展示豆瓣 UI。
-
-影视条目优先展示 IMDb 评分；确实没有 IMDb ID 或 IMDb 未收录时，可按页面规则回退展示 TMDB 评分，并明确标注来源。
-
-## 缓存核查
-
-所有第三方响应缓存写入 MySQL 的 `api_cache`，同步结果写入 `provider_sync_logs`。
-
-```powershell
-npm run cache:inspect
-npm run cache:export
-npm run cache:export -- cache-review.json
-```
-
-也可以使用 DBeaver、DataGrip 或 MySQL Workbench 连接 `moviescope` 数据库直接核查。缓存或日志导出文件可能包含大量第三方响应，不应提交到 Git。
-
-## 创建管理员
-
-先通过网站注册普通账号，再执行：
-
-```powershell
-npm run admin:promote -- <用户名或邮箱>
-```
-
-重新登录后可访问 `/admin`。提升脚本会同时加入内置“超级管理员”组。系统没有默认管理员和默认管理员密码。
-
-## 主要接口
-
-- `GET /api/v1/health`：服务和 MySQL 健康检查；
-- `GET /api/v1/home`：首页聚合数据；
-- `GET /api/v1/search`：综合搜索；
-- `GET /api/v1/discover`：影视探索与筛选；
-- `POST /api/v1/auth/register`：注册；
-- `POST /api/v1/auth/login`：登录；
-- `GET /api/v1/me/profile`：当前用户个人中心数据；
-- `PUT /api/v1/me/media/:type/:id`：保存观影状态、收藏、评分和短评；
-- `GET /api/v1/admin/overview`：管理员概览。
-
-前端页面应继续通过 `src/services` 访问 MovieScope 后端，由服务端的 Provider 层访问第三方 API。
-
-## 校验
-
-```powershell
+npm test
 npm run typecheck
 npm run build
-node --test server/home-service.test.mjs server/user-service.test.mjs
+npm run check
 ```
 
-不要提交 `.env`、数据库密码、第三方 API Token、会话 Token、数据库转储或缓存导出文件。
+API 默认监听 `http://127.0.0.1:8787`；启动时按文件名顺序执行 `db/migrations/*.mysql.sql`。
+
+## 当前缓存策略
+
+影视通用 Just One 数据：上映 ≤14 天缓存 1 天；14–60 天缓存 7 天；60–90 天缓存 30 天；>90 天缓存 60 天。奖项在上映 180 天内缓存 7 天，之后 45 天；“你知道吗”在上映 30 天内缓存 7 天，之后 45 天。Top 250 为 7 天，豆瓣近期热门为 3 天，IMDb 新闻为 1 天。详情见架构文档。
+
+## 文档
+
+- [完整项目与架构说明](./docs/项目与架构说明.md)
+- [需求理解](./docs/需求理解.md)
+- [方案设计](./docs/方案设计.md)
+- [用户使用手册](./docs/用户使用手册.md)
+- [管理员操作手册](./docs/管理员操作手册.md)
+- [GitHub Actions 部署手册](./docs/GitHub-Actions部署手册.md)
+- [代码审查与历史记录](./docs/代码审查.md)
+
+生产环境使用 `docker-compose.prod.yml` 编排 MySQL、API 和 Nginx Web；密钥仅配置在服务器环境变量或 GitHub Secrets。`.env`、日志、数据库数据、缓存导出和构建产物不得提交。
+
+## License
+
+[MIT](./LICENSE)
