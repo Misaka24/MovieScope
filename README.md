@@ -54,12 +54,9 @@ API 默认监听 `http://127.0.0.1:8787`；启动时按文件名顺序执行 `db
 ## 文档
 
 - [完整项目与架构说明](./docs/项目与架构说明.md)
-- [需求理解](./docs/需求理解.md)
-- [方案设计](./docs/方案设计.md)
 - [用户使用手册](./docs/用户使用手册.md)
 - [管理员操作手册](./docs/管理员操作手册.md)
 - [GitHub Actions 部署手册](./docs/GitHub-Actions部署手册.md)
-- [代码审查与历史记录](./docs/代码审查.md)
 
 生产环境使用 `docker-compose.prod.yml` 编排 MySQL、API 和 Nginx Web；密钥仅配置在服务器环境变量或 GitHub Secrets。`.env`、日志、数据库数据、缓存导出和构建产物不得提交。
 

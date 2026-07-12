@@ -11,3 +11,17 @@ backups/
 *.log
 api-cache-export.json
 cache-review.json
+coverage/
+.coverage/
+.nyc_output/
+tmp/
+temp/
+.tmp/
+.cache/
+.agents/
+*.tmp
+*.temp
+*.bak
+*.swp
+Thumbs.db
+.DS_Store
