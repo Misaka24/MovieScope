@@ -23,6 +23,7 @@ import {
   createSession,
   deleteMediaEntry,
   getCommunityReviews,
+  toggleReviewLike,
   getHistory,
   getMediaEntry,
   getOwnProfile,
@@ -740,10 +741,21 @@ const server = createServer(async (request, response) => {
       /^\/api\/v1\/titles\/(movie|tv)\/(\d+)\/reviews$/,
     );
     if (titleReviews && request.method === "GET") {
+      const viewer = await authUser(request);
       success(
         response,
-        await getCommunityReviews(titleReviews[1], Number(titleReviews[2])),
+        await getCommunityReviews(
+          titleReviews[1],
+          Number(titleReviews[2]),
+          viewer?.id,
+        ),
       );
+      return;
+    }
+    const reviewLike = url.pathname.match(/^\/api\/v1\/reviews\/(\d+)\/like$/);
+    if (reviewLike && request.method === "POST") {
+      const user = await requireUser(request);
+      success(response, await toggleReviewLike(user.id, Number(reviewLike[1])));
       return;
     }
     const titleMatch = url.pathname.match(

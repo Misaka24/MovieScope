@@ -468,20 +468,53 @@ export async function getPublicProfile(username, viewerId = null) {
     entries: entries.rows.map(mediaEntry),
   };
 }
-export async function getCommunityReviews(mediaType, tmdbId) {
+export async function getCommunityReviews(mediaType, tmdbId, viewerId = null) {
   const db = await getDatabase(),
     result = await db.query(
-      `SELECT e.*,u.username,u.display_name,u.avatar_url FROM user_media_entries e JOIN users u ON u.id=e.user_id WHERE e.media_type=? AND e.tmdb_id=? AND e.review_text IS NOT NULL AND e.review_text<>'' AND e.review_status='published' AND u.status='active' AND u.profile_visibility='public' ORDER BY e.updated_at DESC LIMIT 50`,
-      [mediaType, tmdbId],
+      `SELECT e.*,u.username,u.display_name,u.avatar_url,COUNT(rl.user_id) like_count,MAX(CASE WHEN rl.user_id=? THEN 1 ELSE 0 END) liked_by_viewer FROM user_media_entries e JOIN users u ON u.id=e.user_id LEFT JOIN user_review_likes rl ON rl.review_id=e.id WHERE e.media_type=? AND e.tmdb_id=? AND e.review_text IS NOT NULL AND e.review_text<>'' AND e.review_status='published' AND u.status='active' AND u.profile_visibility='public' GROUP BY e.id,u.id ORDER BY e.updated_at DESC LIMIT 50`,
+      [viewerId || 0, mediaType, tmdbId],
     );
   return result.rows.map((row) => ({
     ...mediaEntry(row),
+    likeCount: Number(row.like_count || 0),
+    likedByViewer: Boolean(row.liked_by_viewer),
     user: {
       username: row.username,
       displayName: row.display_name,
       avatarUrl: row.avatar_url || defaultAvatar,
     },
   }));
+}
+
+export async function toggleReviewLike(userId, reviewId) {
+  const db = await getDatabase();
+  const review = await db.query(
+    "SELECT id FROM user_media_entries WHERE id=? AND review_text IS NOT NULL AND review_text<>'' AND review_status='published' LIMIT 1",
+    [reviewId],
+  );
+  if (!review.rows[0]) throw httpError(404, "评论不存在", "REVIEW_NOT_FOUND");
+  const existing = await db.query(
+    "SELECT 1 FROM user_review_likes WHERE review_id=? AND user_id=? LIMIT 1",
+    [reviewId, userId],
+  );
+  if (existing.rows[0])
+    await db.query(
+      "DELETE FROM user_review_likes WHERE review_id=? AND user_id=?",
+      [reviewId, userId],
+    );
+  else
+    await db.query(
+      "INSERT INTO user_review_likes(review_id,user_id) VALUES(?,?)",
+      [reviewId, userId],
+    );
+  const count = await db.query(
+    "SELECT COUNT(*) count FROM user_review_likes WHERE review_id=?",
+    [reviewId],
+  );
+  return {
+    liked: !existing.rows[0],
+    likeCount: Number(count.rows[0]?.count || 0),
+  };
 }
 
 async function audit(admin, action, targetType, targetId, detail, ip) {

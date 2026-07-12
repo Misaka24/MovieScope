@@ -104,16 +104,19 @@ const imdbCriticsUrl = computed(
       : null),
 );
 const boxOfficeMetrics = computed(() => {
-  const source = externalReviews.value?.boxOffice.data as {
-    budget?: { amount?: number | null; currency?: string | null } | null;
-    openingWeekends?: Array<{
-      amount?: number | null;
-      currency?: string | null;
-      date?: string | null;
-    }>;
-    domestic?: { amount?: number | null; currency?: string | null } | null;
-    worldwide?: { amount?: number | null; currency?: string | null } | null;
-  } | null | undefined;
+  const source = externalReviews.value?.boxOffice.data as
+    | {
+        budget?: { amount?: number | null; currency?: string | null } | null;
+        openingWeekends?: Array<{
+          amount?: number | null;
+          currency?: string | null;
+          date?: string | null;
+        }>;
+        domestic?: { amount?: number | null; currency?: string | null } | null;
+        worldwide?: { amount?: number | null; currency?: string | null } | null;
+      }
+    | null
+    | undefined;
   if (!source) return [];
   const formatAmount = (
     value?: { amount?: number | null; currency?: string | null } | null,
@@ -137,7 +140,9 @@ const boxOfficeMetrics = computed(() => {
     },
     { label: "北美累计票房", value: formatAmount(source.domestic) },
     { label: "全球累计票房", value: formatAmount(source.worldwide) },
-  ].filter((item): item is { label: string; value: string } => Boolean(item.value));
+  ].filter((item): item is { label: string; value: string } =>
+    Boolean(item.value),
+  );
 });
 const chartRankingItems = computed(
   () => externalReviews.value?.chartRankings.items || [],
@@ -154,7 +159,7 @@ const allCommunityReviews = computed(() =>
     .sort((a, b) =>
       communitySort.value === "time"
         ? String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))
-        : Number(b.rating || 0) - Number(a.rating || 0) ||
+        : Number(b.likeCount || 0) - Number(a.likeCount || 0) ||
           String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")),
     ),
 );
@@ -299,6 +304,12 @@ async function setWatch(value: string) {
   if (!requireLogin()) return;
   watchState.value = watchState.value === value ? "" : value;
   await saveInteraction();
+}
+async function toggleCommunityLike(entry: MediaEntry) {
+  if (!requireLogin()) return;
+  const result = await mediaApi.toggleReviewLike(entry.id);
+  entry.likedByViewer = result.liked;
+  entry.likeCount = result.likeCount;
 }
 async function loadExternalReviews() {
   if (!data.value || externalLoading.value || externalReviews.value) return;
@@ -618,12 +629,6 @@ async function loadFullReview(
                       <div>
                         <button
                           class="review-filter"
-                          :class="audienceSource === 'tmdb' ? 'active' : ''"
-                          @click="audienceSource = 'tmdb'"
-                        >
-                          TMDB</button
-                        ><button
-                          class="review-filter"
                           :class="communitySort === 'hot' ? 'active' : ''"
                           @click="communitySort = 'hot'"
                         >
@@ -697,9 +702,19 @@ async function loadFullReview(
                       >
                         {{ entry.reviewText }}
                       </p>
-                      <time class="mt-3 block text-xs text-outline">{{
-                        formatDate(entry.updatedAt)
-                      }}</time>
+                      <div class="mt-3 flex items-center justify-between gap-4">
+                        <time class="text-xs text-outline">{{
+                          formatDate(entry.updatedAt)
+                        }}</time>
+                        <button
+                          class="community-like"
+                          :class="{ active: entry.likedByViewer }"
+                          @click="toggleCommunityLike(entry)"
+                        >
+                          <span class="material-symbols-outlined">thumb_up</span
+                          ><span>{{ entry.likeCount || 0 }}</span>
+                        </button>
+                      </div>
                     </article>
                   </div>
                   <button
@@ -874,7 +889,10 @@ async function loadFullReview(
                       >
                         <span>评论 ID：{{ review.id }}</span>
                         <span
-                          v-if="review.kind !== 'review' && Number(review.upVotes) > 0"
+                          v-if="
+                            review.kind !== 'review' &&
+                            Number(review.upVotes) > 0
+                          "
                           >👍 {{ formatCount(review.upVotes) }}</span
                         ><span v-if="Number(review.downVotes) > 0"
                           >👎 {{ formatCount(review.downVotes) }}</span
@@ -1579,6 +1597,30 @@ async function loadFullReview(
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.025);
   padding: 20px;
+}
+.community-like {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  padding: 5px 10px;
+  color: rgba(255, 255, 255, 0.52);
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+.community-like:hover {
+  background: rgba(245, 197, 24, 0.1);
+  color: #f5c518;
+  transform: translateY(-1px);
+}
+.community-like.active {
+  background: rgba(245, 197, 24, 0.14);
+  color: #f5c518;
+}
+.community-like .material-symbols-outlined {
+  font-size: 17px;
 }
 .review-text:not([open]) p {
   display: none;

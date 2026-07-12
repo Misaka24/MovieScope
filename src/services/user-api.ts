@@ -1,4 +1,4 @@
-import { apiRequest, buildQuery } from './api-client'
+import { apiRequest, buildQuery } from "./api-client";
 
 export interface SessionUser {
   id: number;
@@ -35,6 +35,8 @@ export interface MediaEntry {
   watchedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  likeCount?: number;
+  likedByViewer?: boolean;
   user?: { username: string; displayName: string; avatarUrl?: string };
 }
 export interface ProfileData {
@@ -105,6 +107,11 @@ export const mediaApi = {
     }),
   reviews: (type: string, id: number) =>
     userRequest<MediaEntry[]>(`/api/v1/titles/${type}/${id}/reviews`),
+  toggleReviewLike: (reviewId: number) =>
+    userRequest<{ liked: boolean; likeCount: number }>(
+      `/api/v1/reviews/${reviewId}/like`,
+      { method: "POST" },
+    ),
 };
 const queryString = (params: Record<string, unknown> = {}) => {
   const query = new URLSearchParams();
