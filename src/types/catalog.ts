@@ -223,7 +223,7 @@ export interface PersonDetails {
 
 export interface ExternalAudienceReview {
   id: string;
-  platform: "IMDb" | "豆瓣";
+  platform: "TMDB" | "IMDb" | "豆瓣";
   kind?: "comment" | "review";
   authorId: string | null;
   author: string;
@@ -232,6 +232,7 @@ export interface ExternalAudienceReview {
   title: string | null;
   content: string | null;
   createdAt: string | null;
+  updatedAt?: string | null;
   spoiler: boolean;
   language: string | null;
   location?: string | null;
@@ -242,6 +243,9 @@ export interface ExternalAudienceReview {
   forwardCount?: number | null;
   collectCount?: number | null;
   hotScore: number;
+  username?: string | null;
+  url?: string | null;
+  rawData?: Record<string, unknown>;
 }
 export interface ExternalReviewsData {
   imdbId: string | null;
@@ -261,6 +265,13 @@ export interface ExternalReviewsData {
     }>;
   };
   audience: {
+    tmdb: {
+      status: string;
+      message?: string;
+      pageCount?: number;
+      totalResults?: number;
+      items: ExternalAudienceReview[];
+    };
     imdb: { status: string; message?: string; items: ExternalAudienceReview[] };
     douban: {
       status: string;

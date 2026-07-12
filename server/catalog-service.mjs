@@ -594,18 +594,98 @@ async function safeJustOne(path, params, ttlMs) {
   }
 }
 
+async function loadAllTmdbReviews(mediaType, id) {
+  const path = `/${mediaType}/${id}/reviews`;
+  const ttlMs = 6 * 60 * 60 * 1000;
+  try {
+    const first = await tmdb(path, { language: "", page: 1 }, ttlMs);
+    const totalPages = Math.max(1, Math.min(500, number(first.total_pages, 1)));
+    const pages = [first];
+    for (let start = 2; start <= totalPages; start += 10) {
+      const batch = await Promise.all(
+        Array.from(
+          { length: Math.min(10, totalPages - start + 1) },
+          (_, index) =>
+            tmdb(path, { language: "", page: start + index }, ttlMs),
+        ),
+      );
+      pages.push(...batch);
+    }
+    const tmdbAvatar = (path) => {
+      if (!path) return null;
+      const normalized = String(path).replace(/^\/(https?:\/\/)/, "$1");
+      return /^https?:\/\//.test(normalized)
+        ? normalized
+        : image(normalized, "w185", null);
+    };
+    const items = pages
+      .flatMap((page) => page.results || [])
+      .filter(
+        (item, index, all) =>
+          all.findIndex((candidate) => candidate.id === item.id) === index,
+      )
+      .map((item) => ({
+        id: String(item.id),
+        platform: "TMDB",
+        kind: "review",
+        authorId: item.author_details?.username || null,
+        author:
+          item.author_details?.name ||
+          item.author ||
+          item.author_details?.username ||
+          "TMDB 用户",
+        username: item.author_details?.username || null,
+        avatar: tmdbAvatar(item.author_details?.avatar_path),
+        rating: number(item.author_details?.rating),
+        title: null,
+        content: item.content || null,
+        createdAt: item.created_at || null,
+        updatedAt: item.updated_at || null,
+        spoiler: Boolean(item.spoiler),
+        language: item.iso_639_1 || null,
+        url: item.url || null,
+        location: null,
+        upVotes: null,
+        downVotes: null,
+        helpfulness: null,
+        replyCount: null,
+        forwardCount: null,
+        collectCount: null,
+        hotScore: number(item.author_details?.rating, 0),
+        rawData: item,
+      }));
+    return {
+      status: "ready",
+      pageCount: totalPages,
+      totalResults: number(first.total_results, items.length),
+      items,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : String(error),
+      pageCount: 0,
+      totalResults: 0,
+      items: [],
+    };
+  }
+}
+
 export async function getExternalTitleReviews(mediaType, id) {
   const details = await tmdb(
     `/${mediaType}/${id}`,
     { language: "zh-CN", append_to_response: "external_ids" },
     30 * 24 * 60 * 60 * 1000,
   );
+  const tmdbAudiencePromise = loadAllTmdbReviews(mediaType, id);
   const imdbId = details.external_ids?.imdb_id || details.imdb_id || null;
-  if (!imdbId)
+  if (!imdbId) {
+    const tmdbAudience = await tmdbAudiencePromise;
     return {
       imdbId: null,
       critics: { status: "unavailable", items: [] },
       audience: {
+        tmdb: tmdbAudience,
         imdb: { status: "unavailable", items: [] },
         douban: { status: "unmapped", items: [] },
       },
@@ -615,6 +695,7 @@ export async function getExternalTitleReviews(mediaType, id) {
       boxOffice: { status: "unavailable", data: null },
       chartRankings: { status: "unavailable", items: [] },
     };
+  }
   const params = { id: imdbId, languageCountry: "en_US" };
   const titleTtlMs = titleDataTtlMs(
     details.release_date || details.first_air_date,
@@ -636,6 +717,7 @@ export async function getExternalTitleReviews(mediaType, id) {
     triviaResult,
     boxOfficeResult,
     doubanIdentity,
+    tmdbAudience,
   ] = await Promise.all([
     safeJustOne(
       "/api/imdb/title-critics-review-summary-query/v1",
@@ -659,6 +741,7 @@ export async function getExternalTitleReviews(mediaType, id) {
     ),
     safeJustOne("/api/imdb/title-box-office-summary/v1", params, titleTtlMs),
     doubanIdentityPromise,
+    tmdbAudiencePromise,
   ]);
   const doubanBundle = doubanIdentity
     ? await getDoubanBundle(doubanIdentity, { ttlMs: titleTtlMs })
@@ -713,6 +796,7 @@ export async function getExternalTitleReviews(mediaType, id) {
           items: criticReviewItems,
         },
     audience: {
+      tmdb: tmdbAudience,
       imdb: usersResult.error
         ? { status: "error", message: usersResult.error, items: [] }
         : {

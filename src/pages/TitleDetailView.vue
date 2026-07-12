@@ -33,7 +33,7 @@ const { data, loading, error, reload } = useAsyncData(
 const moreDetails = ref(false),
   playingTrailer = ref(false),
   hoveredRating = ref(0),
-  audienceSource = ref<"imdb" | "douban">("imdb"),
+  audienceSource = ref<"tmdb" | "imdb" | "douban">("tmdb"),
   audienceSort = ref<"hot" | "time">("hot"),
   audienceSpoiler = ref<"all" | "exclude" | "only">("all"),
   audienceVisible = ref(5),
@@ -331,6 +331,7 @@ async function loadFullReview(
 ) {
   if (
     !(event.currentTarget as HTMLDetailsElement).open ||
+    review.platform !== "豆瓣" ||
     review.kind !== "review" ||
     loadingReviewIds.value.has(review.id)
   )
@@ -617,6 +618,12 @@ async function loadFullReview(
                       <div>
                         <button
                           class="review-filter"
+                          :class="audienceSource === 'tmdb' ? 'active' : ''"
+                          @click="audienceSource = 'tmdb'"
+                        >
+                          TMDB</button
+                        ><button
+                          class="review-filter"
                           :class="communitySort === 'hot' ? 'active' : ''"
                           @click="communitySort = 'hot'"
                         >
@@ -830,7 +837,15 @@ async function loadFullReview(
                                 · {{ review.location }}</template
                               ><template v-if="review.createdAt">
                                 · {{ formatDate(review.createdAt) }}</template
+                              ><template v-if="review.language">
+                                · {{ review.language }}</template
                               >
+                            </p>
+                            <p
+                              v-if="review.username"
+                              class="mt-1 text-[11px] text-outline"
+                            >
+                              @{{ review.username }}
                             </p>
                           </div>
                         </div>
@@ -857,6 +872,7 @@ async function loadFullReview(
                       <div
                         class="mt-4 flex flex-wrap gap-4 text-xs text-on-surface-variant"
                       >
+                        <span>评论 ID：{{ review.id }}</span>
                         <span
                           v-if="review.kind !== 'review' && Number(review.upVotes) > 0"
                           >👍 {{ formatCount(review.upVotes) }}</span
@@ -873,8 +889,26 @@ async function loadFullReview(
                           {{ Math.round(review.helpfulness * 100) }}%</span
                         ><span v-if="review.spoiler" class="text-red-300"
                           >含剧透</span
+                        ><span
+                          v-if="
+                            review.updatedAt &&
+                            review.updatedAt !== review.createdAt
+                          "
+                          >更新于 {{ formatDate(review.updatedAt) }}</span
                         >
                       </div>
+                      <a
+                        v-if="review.url"
+                        :href="review.url"
+                        target="_blank"
+                        rel="noreferrer"
+                        class="mt-4 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                      >
+                        查看 {{ review.platform }} 原评论
+                        <span class="material-symbols-outlined text-sm"
+                          >open_in_new</span
+                        >
+                      </a>
                     </article>
                   </div>
                   <div
