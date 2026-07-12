@@ -55,6 +55,8 @@ API 默认监听 `http://127.0.0.1:8787`；启动时按文件名顺序执行 `db
 
 MovieScope 采用“GitHub Actions 构建镜像，服务器只负责运行镜像”的自动部署方式。生产服务器不在宿主机直接运行 Vite、Node.js 或 MySQL，而是由 Docker Compose 管理三个服务：
 
+部署体系的核心分工是：GitHub保存源代码，Actions验证并构建，GHCR保存可运行镜像，Docker Compose运行服务，MySQL卷保存业务数据，双层Nginx负责应用路由与公网接入，Cloudflare负责DNS和边缘代理。更详细的逐层原理、网络隔离、一次请求与一次发布的完整时序见[部署手册：部署与上线原理](./docs/GitHub-Actions部署手册.md#0-部署与上线原理)。
+
 | 服务 | 生产职责 | 网络范围 |
 | --- | --- | --- |
 | web | Nginx 托管 Vite 静态前端，并将 /api/ 转发给 API | 仅绑定宿主机 127.0.0.1:8080 |
