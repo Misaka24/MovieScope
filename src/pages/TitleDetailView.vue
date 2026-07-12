@@ -727,31 +727,6 @@ async function loadFullReview(
                     }}&#65289;
                   </button>
                 </section>
-                <section v-if="data.reviews.length">
-                  <h2 class="section-title">TMDB 用户评论<span></span></h2>
-                  <div class="space-y-5">
-                    <article
-                      v-for="review in data.reviews"
-                      :key="review.id"
-                      class="border-b border-white/5 pb-5"
-                    >
-                      <div class="flex justify-between">
-                        <b>{{ review.author }}</b
-                        ><strong v-if="review.rating" class="text-primary"
-                          >{{ review.rating }} / 10</strong
-                        >
-                      </div>
-                      <p
-                        class="mt-3 line-clamp-5 whitespace-pre-line text-sm leading-6 text-on-surface-variant"
-                      >
-                        {{ review.content }}
-                      </p>
-                      <time class="mt-3 block text-xs text-outline">{{
-                        formatDate(review.createdAt)
-                      }}</time>
-                    </article>
-                  </div>
-                </section>
                 <section v-if="externalReviews">
                   <h2 class="section-title">影迷评价<span></span></h2>
                   <div class="review-toolbar mb-6">
@@ -759,6 +734,12 @@ async function loadFullReview(
                       <span>评论平台</span>
                       <div>
                         <button
+                          class="review-filter"
+                          :class="audienceSource === 'tmdb' ? 'active' : ''"
+                          @click="audienceSource = 'tmdb'"
+                        >
+                          TMDB</button
+                        ><button
                           class="review-filter"
                           :class="audienceSource === 'imdb' ? 'active' : ''"
                           @click="audienceSource = 'imdb'"
