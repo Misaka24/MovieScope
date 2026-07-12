@@ -61,14 +61,18 @@ const age = computed(() => {
                     v-if="data.imdbUrl"
                     :href="data.imdbUrl"
                     target="_blank"
+                    rel="noreferrer"
                     class="person-link"
-                    >IMDb ?</a
+                    ><span>在 IMDb 查看</span
+                    ><span class="material-symbols-outlined">open_in_new</span></a
                   ><a
                     v-if="data.homepage"
                     :href="data.homepage"
                     target="_blank"
+                    rel="noreferrer"
                     class="person-link"
-                    >&#23448;&#26041;&#32593;&#31449; ?</a
+                    ><span>官方网站</span
+                    ><span class="material-symbols-outlined">open_in_new</span></a
                   >
                 </div>
               </div>
@@ -161,9 +165,7 @@ const age = computed(() => {
                 <div>
                   <h2 class="person-title">&#20851;&#32852;&#24433;&#35270;</h2>
                   <p class="mt-2 text-sm text-on-surface-variant">
-                    &#25353; TMDB
-                    &#28909;&#24230;&#25490;&#24207;&#65292;&#24182;&#34917;&#20805;
-                    IMDb &#35780;&#20998;
+                    按作品关注度排序，优先展示 IMDb 评分。
                   </p>
                 </div>
                 <div class="person-tabs">
@@ -232,7 +234,9 @@ const age = computed(() => {
   font-size: 12px;
   font-weight: 900;
   transition: 0.25s;
+  gap: 6px;
 }
+.person-link .material-symbols-outlined { font-size: 16px; }
 .person-link:hover {
   background: #f5c518;
   color: #111317;
