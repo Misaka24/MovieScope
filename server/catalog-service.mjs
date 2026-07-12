@@ -431,15 +431,36 @@ export async function getTitleDetails(mediaType, id) {
     mediaType === "movie"
       ? details.release_dates?.results || []
       : details.content_ratings?.results || [];
-  const cnRelease =
-    releaseDates.find((item) => item.iso_3166_1 === "CN") ||
-    releaseDates.find((item) => item.iso_3166_1 === "US");
+  const productionRegions = (
+    details.origin_country ||
+    details.production_countries?.map((country) => country.iso_3166_1) ||
+    []
+  ).filter(Boolean);
+  const ratingRegions = [
+    "CN",
+    "HK",
+    "TW",
+    ...productionRegions,
+    "US",
+    "GB",
+    "JP",
+    "KR",
+    "FR",
+    "DE",
+  ];
+  const ratingForRegion = (region) => {
+    const entry = releaseDates.find((item) => item.iso_3166_1 === region);
+    return mediaType === "movie"
+      ? entry?.release_dates?.map((item) => item.certification).find(Boolean) ||
+          null
+      : entry?.rating || null;
+  };
   const certification =
-    mediaType === "movie"
-      ? cnRelease?.release_dates
-          ?.map((item) => item.certification)
-          .find(Boolean) || null
-      : cnRelease?.rating || null;
+    [...new Set(ratingRegions)].map(ratingForRegion).find(Boolean) ||
+    releaseDates
+      .map((item) => ratingForRegion(item.iso_3166_1))
+      .find(Boolean) ||
+    null;
   const credits = creditsData(
     mediaType === "tv"
       ? details.aggregate_credits || details.credits
