@@ -10,6 +10,13 @@ button,a,input,select,textarea{min-width:0}
 .responsive-shell{width:min(calc(100% - 32px),1216px);margin-inline:auto}
 @media(min-width:768px){.responsive-shell{width:min(calc(100% - 64px),1440px)}}
 @media(min-width:1800px){.responsive-shell{width:min(calc(100% - 96px),1680px)}}
+@media(min-width:2200px){
+  .responsive-shell,
+  .max-w-\[1216px\],
+  .max-w-\[1440px\],
+  .max-w-\[1480px\],
+  .max-w-\[1680px\]{max-width:min(calc(100% - 128px),2880px)}
+}
 @media(max-width:639px){html{font-size:15px}}
 @media(min-width:2200px){html{font-size:15px}}
 @media(min-width:1200px) and (min-resolution:1.5dppx){html{font-size:14.5px}}
