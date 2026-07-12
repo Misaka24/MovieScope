@@ -50,6 +50,7 @@ function pagination(response, results) {
     page: number(response?.page, 1),
     totalPages: Math.min(500, number(response?.total_pages, 1)),
     totalResults: number(response?.total_results, results.length),
+    results,
   };
 }
 
