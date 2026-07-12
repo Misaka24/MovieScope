@@ -64,7 +64,7 @@ watch(q, () => clearFilters())
 <main class="mx-auto flex max-w-[1440px] gap-6 px-4 pb-12 pt-[74px] md:px-6">
 <button class="fixed bottom-5 right-5 z-30 flex h-11 items-center gap-2 rounded-full bg-primary-container px-4 text-sm font-bold text-on-primary-container shadow-xl lg:hidden" @click="mobileFilters=true"><span class="material-symbols-outlined">tune</span>筛选</button>
 <div v-if="mobileFilters" class="fixed inset-0 z-[60] bg-black/65 lg:hidden" @click.self="mobileFilters=false"></div>
-<aside :class="mobileFilters ? 'fixed inset-y-0 left-0 z-[70] w-[310px] overflow-y-auto p-4 pt-6' : 'hidden'" class="flex-none bg-background lg:sticky lg:top-[66px] lg:block lg:h-fit lg:w-72 lg:p-0">
+<aside :class="mobileFilters ? 'fixed inset-y-0 left-0 z-[70] w-[min(310px,calc(100vw-32px))] overflow-y-auto p-4 pt-6' : 'hidden'" class="flex-none bg-background lg:sticky lg:top-[66px] lg:block lg:h-fit lg:w-72 lg:p-0">
 <div class="filter-panel space-y-4">
 <div class="flex items-center justify-between border-b border-white/10 pb-3"><div><h2 class="text-[15px] font-extrabold">筛选结果</h2><p class="mt-0.5 text-[10px] text-on-surface-variant">当前页面即时筛选</p></div><button class="rounded px-2 py-1 text-[11px] font-bold text-primary transition-colors hover:bg-primary/10" @click="clearFilters">重置</button></div>
 <section><h3 class="filter-title"><span class="material-symbols-outlined">category</span>影视类型</h3><div class="genre-options"><label v-for="genre in genreOptions" :key="genre.id" class="genre-option"><input v-model="draft.genres" :value="genre.id" type="checkbox"><span>{{ genre.name }}</span></label></div></section>

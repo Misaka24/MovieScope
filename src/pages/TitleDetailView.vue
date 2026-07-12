@@ -369,7 +369,7 @@ async function loadFullReview(
       ><template v-if="data"
         ><main class="pb-16 pt-[50px]">
           <section
-            class="relative h-[calc(100vh-50px)] min-h-[680px] w-full overflow-hidden"
+            class="detail-hero relative h-[calc(100svh-50px)] min-h-[560px] w-full overflow-hidden"
           >
             <template v-if="playingTrailer && trailerEmbed">
               <iframe
@@ -399,7 +399,7 @@ async function loadFullReview(
                 class="absolute inset-0 bg-gradient-to-t from-background via-background/10 to-black/20"
               ></div>
               <div
-                class="relative mx-auto flex h-full max-w-[1216px] flex-col justify-end px-4 pb-12 md:px-8"
+                class="detail-shell relative mx-auto flex h-full flex-col justify-end px-4 pb-8 sm:pb-10 md:px-8 md:pb-12"
               >
                 <div class="grid grid-cols-12 items-end gap-6">
                   <div class="col-span-3 hidden md:block lg:col-span-2">
@@ -427,7 +427,7 @@ async function loadFullReview(
                       ><span>{{ formatRuntime(data.runtime) }}</span>
                     </div>
                     <h1
-                      class="text-4xl font-extrabold tracking-tight md:text-6xl"
+                      class="detail-title font-extrabold tracking-tight"
                     >
                       {{ data.title }}
                     </h1>
@@ -524,9 +524,9 @@ async function loadFullReview(
               </div>
             </template>
           </section>
-          <section class="mx-auto max-w-[1216px] px-4 pb-24 pt-20 md:px-8">
-            <div class="grid grid-cols-1 gap-12 lg:grid-cols-12">
-              <div class="min-w-0 space-y-12 lg:col-span-8">
+          <section class="detail-shell mx-auto px-4 pb-16 pt-12 sm:pb-20 sm:pt-16 md:px-8 lg:pb-24 lg:pt-20">
+            <div class="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-10 xl:gap-12">
+              <div class="detail-main min-w-0 space-y-10 sm:space-y-12 lg:col-span-8 xl:col-span-9">
                 <section>
                   <h2 class="section-title">剧情简介<span></span></h2>
                   <p
@@ -1020,7 +1020,7 @@ async function loadFullReview(
                   </div>
                 </section>
               </div>
-              <aside class="min-w-0 space-y-8 lg:col-span-4">
+              <aside class="min-w-0 space-y-6 sm:space-y-8 lg:col-span-4 xl:col-span-3">
                 <section
                   class="space-y-6 rounded-2xl border border-white/5 bg-surface-container p-6"
                 >
@@ -1450,6 +1450,9 @@ async function loadFullReview(
   </div>
 </template>
 <style scoped>
+.detail-shell { width: min(100%, 1216px); }
+.detail-title { font-size: clamp(2.25rem, 5vw, 3.75rem); }
+.detail-hero { max-height: 980px; }
 .detail-action {
   display: inline-flex;
   min-height: 42px;
@@ -1647,6 +1650,25 @@ async function loadFullReview(
   flex-wrap: wrap;
   align-items: center;
   gap: 18px 34px;
+}
+@media (min-width: 1536px) {
+  .detail-shell { width: min(calc(100% - 80px), 1480px); }
+}
+@media (min-width: 1800px) {
+  .detail-shell { width: min(calc(100% - 96px), 1680px); }
+}
+@media (max-width: 767px) {
+  .detail-hero { min-height: 540px; max-height: 820px; }
+  .detail-title { font-size: clamp(2rem, 10vw, 2.75rem); }
+  .section-title { margin-bottom: 18px; font-size: 21px; }
+  .review-card { padding: 16px; }
+  .review-toolbar { gap: 14px 20px; }
+  .review-control { width: 100%; align-items: flex-start; flex-direction: column; }
+  .review-control > div { max-width: 100%; overflow-x: auto; }
+  .metric-card { padding: 13px; }
+}
+@media (max-height: 760px) and (min-width: 768px) {
+  .detail-hero { min-height: 600px; max-height: 760px; }
 }
 .load-more-button {
   margin-top: 20px;

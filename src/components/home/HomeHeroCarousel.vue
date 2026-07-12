@@ -24,7 +24,7 @@ function handleImageLoad(id: string) {
 </script>
 
 <template>
-  <section class="relative h-[100svh] min-h-[560px] w-full overflow-hidden bg-surface-container-lowest">
+  <section class="home-hero relative h-[100svh] min-h-[520px] w-full overflow-hidden bg-surface-container-lowest">
     <template v-if="ready">
       <div class="absolute inset-0 bg-surface-container-lowest">
         <img
@@ -41,7 +41,7 @@ function handleImageLoad(id: string) {
       <div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-black/20"></div>
       <div v-if="imageLoading && !activeImageReady" class="absolute inset-0 bg-surface-container-lowest/35 transition-opacity duration-300"></div>
 
-      <div class="relative z-10 mx-auto flex h-full max-w-[1216px] items-end px-4 pb-16 pt-14 md:px-8 md:pb-[68px] 2xl:max-w-[1480px] 2xl:px-10 min-[1800px]:max-w-[1680px] min-[1800px]:px-12">
+      <div class="relative z-10 mx-auto flex h-full max-w-[1216px] items-end px-4 pb-10 pt-14 sm:pb-12 md:px-8 md:pb-[68px] 2xl:max-w-[1480px] 2xl:px-10 min-[1800px]:max-w-[1680px] min-[1800px]:px-12">
         <div class="hero-copy-stage grid w-full max-w-[680px]">
           <div
             v-for="movie in movies"
@@ -50,7 +50,7 @@ function handleImageLoad(id: string) {
             :class="movie.id === displayedMovieId ? 'is-active' : ''"
           >
             <div class="mb-3.5 flex flex-wrap gap-1.5"><span v-for="genre in movie.genres.slice(0, 2)" :key="genre" class="rounded border border-primary/35 bg-black/40 px-2.5 py-0.5 font-label-caps text-[10px] font-bold text-primary backdrop-blur-md">{{ genre }}</span></div>
-            <h1 class="text-3xl font-extrabold leading-tight text-white md:text-5xl lg:text-6xl">{{ movie.title }}</h1>
+            <h1 class="hero-title font-extrabold leading-tight text-white">{{ movie.title }}</h1>
             <div class="mt-4 flex flex-wrap items-center gap-3.5 text-[13px] font-semibold text-on-surface-variant">
               <span>{{ movie.year || '年份暂无' }}</span><span>{{ primaryRatingLabel(movie, false) }}</span>
             </div>
@@ -92,6 +92,16 @@ function handleImageLoad(id: string) {
   transform: translate3d(0, 0, 0);
 }
 @media (max-width: 767px) { .hero-copy-stage { min-height: 360px; } }
+@media (max-width: 639px) {
+  .home-hero { min-height: 500px; max-height: 760px; }
+  .hero-copy-stage { min-height: 330px; }
+}
+@media (min-width: 640px) { .home-hero { max-height: 980px; } }
+@media (max-height: 760px) and (min-width: 768px) {
+  .home-hero { min-height: 600px; max-height: 760px; }
+  .hero-copy-stage { min-height: 300px; }
+}
+.hero-title { font-size: clamp(1.875rem, 4vw, 3.75rem); }
 @media (prefers-reduced-motion: reduce) {
   .hero-backdrop, .hero-copy-panel { transition-duration: .01ms; }
 }
