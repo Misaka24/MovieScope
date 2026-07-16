@@ -1,20 +1,146 @@
 import { cachedSql } from "./cache.mjs";
 import { getProviderRuntime } from "./runtime-config.mjs";
+import { request as httpsRequest } from "node:https";
+import { isIP } from "node:net";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const requestTimeout = Number(process.env.API_TIMEOUT_MS || 25000);
 const retryableBusinessCodes = new Set([301, 302, 303, 500, 600, 602]);
+let tmdbDnsCache = { addresses: [], expiresAt: 0 };
+let tmdbDnsPromise;
 
 function delay(ms) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
-async function fetchJson(url, options = {}, timeoutMs = requestTimeout) {
-  let response;
+
+export function parseDohAddresses(payload) {
+  return [
+    ...new Set(
+      (payload?.Answer || [])
+        .filter((answer) => Number(answer?.type) === 1)
+        .map((answer) => String(answer?.data || "").trim())
+        .filter((address) => isIP(address) === 4),
+    ),
+  ];
+}
+
+async function resolveTmdbAddresses() {
+  if (
+    tmdbDnsCache.addresses.length &&
+    tmdbDnsCache.expiresAt > Date.now()
+  )
+    return tmdbDnsCache.addresses;
+  if (tmdbDnsPromise) return tmdbDnsPromise;
+  tmdbDnsPromise = (async () => {
+    const url = new URL(
+      process.env.TMDB_DOH_URL || "https://doh.pub/resolve",
+    );
+    url.searchParams.set("name", "api.themoviedb.org");
+    url.searchParams.set("type", "A");
+    const response = await fetch(url, {
+      headers: { Accept: "application/dns-json" },
+      signal: AbortSignal.timeout(Math.min(requestTimeout, 8000)),
+    });
+    if (!response.ok) throw new Error(`DoH ${response.status}`);
+    const payload = await response.json();
+    const addresses = parseDohAddresses(payload);
+    if (!addresses.length) throw new Error("DoH 未返回可用的 IPv4 地址");
+    const ttlValues = (payload.Answer || [])
+      .map((answer) => Number(answer?.TTL))
+      .filter(Number.isFinite);
+    const ttlSeconds = Math.max(
+      60,
+      Math.min(600, ...(ttlValues.length ? ttlValues : [60])),
+    );
+    tmdbDnsCache = {
+      addresses,
+      expiresAt: Date.now() + ttlSeconds * 1000,
+    };
+    return addresses;
+  })().finally(() => {
+    tmdbDnsPromise = undefined;
+  });
+  return tmdbDnsPromise;
+}
+
+function requestViaAddress(url, options, timeoutMs, address) {
+  return new Promise((resolveRequest, rejectRequest) => {
+    const request = httpsRequest(
+      url,
+      {
+        method: options.method || "GET",
+        headers: options.headers,
+        servername: url.hostname,
+        lookup: (_hostname, lookupOptions, callback) => {
+          const result = { address, family: 4 };
+          if (lookupOptions?.all) callback(null, [result]);
+          else callback(null, address, 4);
+        },
+      },
+      (response) => {
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () => {
+          const headers = new Map(
+            Object.entries(response.headers).map(([key, value]) => [
+              key.toLowerCase(),
+              Array.isArray(value) ? value.join(", ") : String(value || ""),
+            ]),
+          );
+          resolveRequest({
+            ok:
+              Number(response.statusCode) >= 200 &&
+              Number(response.statusCode) < 300,
+            status: Number(response.statusCode || 0),
+            headers: { get: (name) => headers.get(name.toLowerCase()) || null },
+            text: async () => Buffer.concat(chunks).toString("utf8"),
+          });
+        });
+      },
+    );
+    request.setTimeout(timeoutMs, () =>
+      request.destroy(new Error(`连接 ${address} 超时`)),
+    );
+    request.on("error", rejectRequest);
+    if (options.body) request.write(options.body);
+    request.end();
+  });
+}
+
+async function fetchTmdb(url, options, timeoutMs) {
   try {
-    response = await fetch(url, {
+    const addresses = await resolveTmdbAddresses();
+    let lastError;
+    for (const address of addresses) {
+      try {
+        return await requestViaAddress(url, options, timeoutMs, address);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error("DoH 地址均不可用");
+  } catch {
+    return fetch(url, {
       ...options,
       signal: AbortSignal.timeout(timeoutMs),
     });
+  }
+}
+
+async function fetchJson(
+  url,
+  options = {},
+  timeoutMs = requestTimeout,
+  requestFactory = null,
+) {
+  let response;
+  try {
+    response = requestFactory
+      ? await requestFactory(url, options, timeoutMs)
+      : await fetch(url, {
+          ...options,
+          signal: AbortSignal.timeout(timeoutMs),
+        });
   } catch (error) {
     const reason =
       error?.cause?.code ||
@@ -76,6 +202,7 @@ export async function tmdb(path, params = {}, ttlMs = 15 * 60 * 1000) {
           },
         },
         runtime.requestTimeoutMs,
+        fetchTmdb,
       ),
   });
   return { ...result.value, _cache: result.cache };
