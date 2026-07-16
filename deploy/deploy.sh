@@ -8,5 +8,5 @@ fi
 docker compose --env-file .env.production -f docker-compose.prod.yml pull
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --remove-orphans
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
-curl --fail --retry 12 --retry-delay 5 http://127.0.0.1:8080/api/v1/health
+curl --fail --retry 12 --retry-all-errors --retry-delay 5 http://127.0.0.1:8080/api/v1/health
 echo "MovieScope deployment is healthy."
